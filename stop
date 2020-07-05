@@ -1,0 +1,168 @@
+#!/bin/bash
+#
+source "/etc/uwin.conf"
+
+restart()
+{
+    param=$(ls /sys/module/cfg80211/parameters | grep block_wildcard_scan)
+    if [ -n "$param" ]; then
+        echo 0 > /sys/module/cfg80211/parameters/block_wildcard_scan
+    fi
+    param=$(ls /sys/module/cfg80211/parameters | grep bss_scan_filtering)
+    if [ -n "$param" ]; then
+        echo 0 > /sys/module/cfg80211/parameters/bss_scan_filtering
+    fi
+    if [ "$WIFI_PCI" = "wls2" ]; then
+        systemctl restart named.service
+    fi
+    systemctl restart NetworkManager.service
+    systemctl restart systemd-resolved.service
+    sleep 5
+    if [ -n "$DNSADDR" ]; then
+        dns=$(cat $RESCONF | grep $DNSADDR)
+        if [ -z "$dns" ]; then
+            sed -i '1inameserver '$DNSADDR'' $RESCONF
+        fi
+    fi
+}
+
+down_br()
+{
+    br=$(ifconfig -a | grep $BRI_IF | awk '{print $1}') > /dev/null 2>&1
+    if [ -n "$br" ]; then
+        while [ 1 ]; do
+            brif=$(brctl show | grep $BRI_IF | awk '{print $4}') > /dev/null 2>&1
+            if [ -z "$brif" ]; then
+                break
+            fi
+            brctl delif $BRI_IF $brif
+        done
+        ifconfig $BRI_IF down
+        brctl delbr $BRI_IF
+    fi
+    br=$(ifconfig -a | grep $LAN_IF | awk '{print $1}') > /dev/null 2>&1
+    if [ -n "$br" ]; then
+        while [ 1 ]; do
+            brif=$(brctl show | grep $LAN_IF | awk '{print $4}') > /dev/null 2>&1
+            if [ -z "$brif" ]; then
+                break
+            fi
+            brctl delif $LAN_IF $brif
+        done
+        ifconfig $LAN_IF down
+        brctl delbr $LAN_IF
+    fi
+}
+
+down_wifi()
+{
+     if [ -n "$WIFI_USB" ]; then
+        iface=$(ifconfig -a | grep $WIFI_USB | awk '{print $1}') > /dev/null 2>&1
+        if [ -n "$iface" ]; then
+            ifconfig $WIFI_USB down
+            sleep 1
+            if [ -n "$RTL_MOD" ]; then
+                rtl=$(lsmod | grep $RTL_MOD | head -n1 | awk '{print $1}')
+                if [ -n "$rtl" ]; then
+                    rmmod $RTL_MOD > /dev/null 2>&1
+                fi
+            fi
+        fi
+    fi
+    if [ -n "$WIFI_PCI" ]; then
+        if [ -n "$MON_IF" ]; then
+            iface=$(ifconfig -a | grep $MON_IF | awk '{print $1}') > /dev/null 2>&1
+            if [ -n "$iface" ]; then
+                iw dev $MON_IF del
+            fi
+        fi
+        if [ -n "$SAP_IF" ]; then
+            iface=$(ifconfig -a | grep $SAP_IF | awk '{print $1}') > /dev/null 2>&1
+            if [ -n "$iface" ]; then
+                ifconfig $SAP_IF down
+                iw dev $SAP_IF del
+            fi
+        fi
+        iface=$(ifconfig -a | grep $WIFI_PCI | awk '{print $1}') > /dev/null 2>&1
+        if [ -n "$iface" ]; then
+            ifconfig $WIFI_PCI down
+            sleep 1
+            wiphy=$(iw phy | grep 'Wiphy' | awk '{print $2}') > /dev/null 2>&1
+            if [ -n "$wiphy" ] && [ -n "$ATH_MOD" -o -n "$IWL_MOD" ]; then
+                wds=0
+                if [ -n "$STA_IF" ] && [ "$BRI_PHY" = "2" ]; then
+                    wds=1
+                fi
+                if [ -n "$WLN_IF" ] && [ "$WLN_WDS" = "1" ]; then
+                    wds=1
+                fi
+                if [ -n "$SAP_IF" ] && [ "$SAP_WDS" = "1" ]; then
+                    wds=1
+                fi
+                if [ "$wds" = "1" ]; then
+                    iw dev $WIFI_PCI del
+                    logger "Wi-Fi radio device will run 3-address mode"
+                    iw phy $wiphy interface add $WIFI_PCI type managed > /dev/null 2>&1
+                fi
+            fi
+        fi
+        ifconfig $WIFI_PCI up
+    fi
+}
+
+down_if()
+{
+    down_wifi
+    if [ -n "$USB_IF" ]; then
+        iface=$(ifconfig | grep $USB_IF | awk '{print $1}') > /dev/null 2>&1
+        if [ -n "$iface" ]; then
+            ifconfig $USB_IF down
+        fi
+    fi
+    if [ -n "$ENX_IF" ]; then
+        iface=$(ifconfig | grep $ENX_IF | awk '{print $1}') > /dev/null 2>&1
+        if [ -n "$iface" ]; then
+            ifconfig $ENX_IF down
+        fi
+    fi
+    ifconfig $WIRE_ETH down
+}
+
+stop_ps()
+{
+    pid=$(ps -ef | grep 'netmgr.sh' | awk '{print $2}')
+    for i in $pid; do
+        if [ $i -ne $$ ]; then
+            kill -9 $i > /dev/null 2>&1
+        fi
+    done
+    killall $WPASUPP > /dev/null 2>&1
+    killall $HOSTAPD > /dev/null 2>&1
+    killall $DHCPCLI > /dev/null 2>&1
+    killall $DHCPSRV > /dev/null 2>&1
+}
+
+logger "Stop UWIN network manager..."
+
+stop_ps
+down_if
+down_br
+
+if [ -n "$USB_IF" ]; then
+    iface=$(ifconfig -a | grep $USB_IF | awk '{print $1}') > /dev/null 2>&1
+    if [ -n "$iface" ]; then
+        ifconfig $USB_IF up
+    fi
+fi
+if [ -n "$ENX_IF" ]; then
+    iface=$(ifconfig -a | grep $ENX_IF | awk '{print $1}') > /dev/null 2>&1
+    if [ -n "$iface" ]; then
+        ifconfig $ENX_IF up
+    fi
+fi
+ifconfig $WIRE_ETH up
+
+restart
+
+exit 0
+
