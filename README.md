@@ -1,2 +1,2 @@
-# uwin_netmgr
+# uwin
 UWIN network manager source code and config file. More info is to be added...
