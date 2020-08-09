@@ -559,7 +559,7 @@ config_lan()
         else
             echo "option domain-name-servers 8.8.8.8, 8.8.4.4;"
         fi
-        echo "default-lease-time 600;"
+        echo "default-lease-time 28800;"
         echo "max-lease-time 7200;"
         echo "subnet $LAN_NET netmask $LAN_MASK {"
         echo "  range $LAN_START $LAN_END;"
@@ -628,47 +628,62 @@ init_lan()
 }
 
 #*******************#
-# Monitor Operation #
+# BTT Radio Metrics #
 #*******************#
-start_mon()
+dump_btt_phy()
 {
-    if [ -z "$MON_MAC" ]; then
-        $IWUTILS dev $WIFI_PCI interface add $MON_IF type monitor > /dev/null 2>&1
-        sleep 1
-        logger "MON ($MON_IF) info: monitor interface created"
-    fi
-    MON_MAC=$(ip addr show dev $MON_IF | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
-    if [ -n "$MON_MAC" ]; then
-        ifconfig $MON_IF up
-    fi
+    phy1=$1
+    phy2=$2
+    phy3=$3
+    phy4=$4
+    echo -n > $PHY_INFO
+    {
+        echo "BTT info:"
+        if [ -n "$phy3" ]; then
+            echo "  LAN_CHAN=$phy3"
+            echo "  LAN_BAND=$phy4"
+            echo "  WAN_RSSI=$phy1"
+            echo "  WAN_RATE=$phy2"
+        else
+            echo "  LAN_CHAN=$phy1"
+            echo "  LAN_BAND=$phy2"
+        fi
+    } >> $PHY_INFO
 }
 
+#*******************#
+# Monitor Operation #
+#*******************#
 stop_mon()
 {
     kill_all "wireshark"
-    if [ -n "$MON_MAC" ]; then
+    if [ -n "$MON_IF" ]; then
         ifconfig $MON_IF down
+        $IWUTILS dev $MON_IF del
     fi
 }
 
 init_mon()
 {
     if [ -z "$MON_IF" ]; then
+        monif=$(ifconfig -a | grep mon0 | awk '{print $1}')
+        if [ -n "$monif" ]; then
+            MON_IF=mon0
+            stop_mon
+        fi
         return
     fi
-    MON_MAC=""
-    mon_if=$(ifconfig -a | grep $MON_IF | awk '{print $1}')
+    monif=$(ifconfig -a | grep $MON_IF | awk '{print $1}')
     if [ -n "$mon_if" ]; then
-        MON_MAC=$(ip addr show dev $MON_IF | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
-    fi
-    if [ "$MON_OP" = "0" ]; then
         stop_mon
-        return
     fi
-    start_mon
-    if [ "$STA_OP" = "0" ] && [ "$WLN_OP" = "0" ]; then
-        $IWUTILS dev $MON_IF set channel $MON_CHAN HT20
-        logger "MON ($MON_IF) info: wireless monitor (channel: $MON_CHAN)"
+    if [ "$MON_OP" = "1" ]; then
+        $IWUTILS dev $WIFI_PCI interface add $MON_IF type monitor > /dev/null 2>&1
+        monif=$(ifconfig -a | grep $MON_IF | awk '{print $1}')
+        if [ -n "$monif" ]; then
+            logger "MON ($MON_IF) info: monitor interface created"
+            ifconfig $MON_IF up
+        fi
     fi
 }
 
@@ -723,6 +738,15 @@ ssid_wln()
 
 reset_wln()
 {
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "0" ]; then
+        pid=$(pgrep -f $BTTNODE)
+        if [ -n "$pid" ]; then
+            kill $pid
+        fi
+        if [ -e "$BTT_INFO" ]; then
+            rm -f $BTT_INFO
+        fi
+    fi
     stop_wln
     WLN_STATE="STARTING"
     WLN_SSID=""
@@ -742,8 +766,19 @@ check_wln()
         sleep 1
         return
     fi
-    pid=$(ps -e | grep hostapd | awk '{print $1}')
-    if [ -z "$pid" ]; then
+    wlnphy=$(cat /sys/class/net/$WLN_IF/operstate) > /dev/null 2>&1
+    if [ "$wlnphy" = "down" ]; then
+        ifconfig $WLN_IF up
+        return
+    fi
+    pid=$(ps -ef | grep $WLN_CONF | awk '{print $2}')
+    fid=$(cat $WLN_PID)
+    for pi in $pid; do
+        if [ "$pi" = "$fid" ]; then
+            break
+        fi
+    done
+    if [ "$pi" != "$fid" ]; then
         if [ "$WLN_TOGGLE_TEST" = "1" ]; then
             if [ $WLN_TOGGLE_COUNT -gt 0 ]; then
                 WLN_TOGGLE_COUNT=$(($WLN_TOGGLE_COUNT - 1))
@@ -762,21 +797,29 @@ check_wln()
         reset_wln
         return
     fi
-    wln_phy=$(cat /sys/class/net/$WLN_IF/operstate) > /dev/null 2>&1
-    if [ "$wln_phy" = "down" ]; then
-        ifconfig $WLN_IF up
-        return
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "0" ]; then
+        pid=$(pgrep -f $BTTNODE)
+        if [ -z "$pid" ]; then
+            $BTTNODE -l $WLN_IF -m $BTT_COUNT -n $BTT_LOCAL &
+            return
+        fi
     fi
     if [ "$LAN_OP" = "1" ]; then
         check_lan
     fi
-    if [ -n "$WLN_POWER_TX" ]; then
-        return
-    fi
-    if [ "$WLN_SWING_TEST" = "1" ]; then
+    if [ "$WLN_TOGGLE_TEST" = "1" ]; then
+        WLN_TOGGLE_COUNT=$(($WLN_TOGGLE_COUNT - 1))
+        if [ $WLN_TOGGLE_COUNT -eq 0 ]; then
+            logger "WLN ($WLN_IF) info: toggle interface down..."
+            WLN_TOGGLE_COUNT=$WLN_TOGGLE_OFF
+            stop_wln
+            WLN_SSID=""
+            dump_wln
+        fi
+    elif [ "$WLN_SWING_TEST" = "1" ]; then
         if [ $WLN_SWING_COUNT -eq $WLN_SWING_DWELL ]; then
-            logger "WLN ($WLN_IF) info: Tx power $WLN_SWING_LEVEL dBm"
-            iwconfig $WLN_IF txpower $WLN_SWING_LEVEL
+            logger "WLN ($WLN_IF) info: Tx power $WLN_SWING_LEVEL mBm"
+            $IWUTILS $WLN_IF set txpower fixed $WLN_SWING_LEVEL
         fi
         WLN_SWING_COUNT=$(($WLN_SWING_COUNT - 1))
         if [ $WLN_SWING_COUNT -eq 0 ]; then
@@ -795,22 +838,19 @@ check_wln()
                 fi
             fi
         fi
-    elif [ "$WLN_TOGGLE_TEST" = "1" ]; then
-        WLN_TOGGLE_COUNT=$(($WLN_TOGGLE_COUNT - 1))
-        if [ $WLN_TOGGLE_COUNT -eq 0 ]; then
-            logger "WLN ($WLN_IF) info: toggle interface down..."
-            WLN_TOGGLE_COUNT=$WLN_TOGGLE_OFF
-            stop_wln
-            WLN_SSID=""
-            dump_wln
-        fi
     fi
 }
 
 link_wln()
 {
-    pid=$(ps -e | grep hostapd | awk '{print $1}')
-    if [ -n "$pid" ]; then
+    pid=$(ps -ef | grep $WLN_CONF | awk '{print $2}')
+    fid=$(cat $WLN_PID)
+    for pi in $pid; do
+        if [ "$pi" = "$fid" ]; then
+            break
+        fi
+    done
+    if [ "$pi" = "$fid" ]; then
         ssid=$(ssid_wln $WLN_IF)
         if [ -n "$ssid" ]; then
             logger "WLN ($WLN_IF) info: \"$ssid\" (bssid: $WLN_MAC channel: $WLN_CHAN)"
@@ -822,14 +862,16 @@ link_wln()
                 logger "VAP ($VAP_IF) info: \"$VAP_SSID\" (bssid: $VAP_MAC)"
             fi
             dump_wln
-            if [ -n "$WLN_POWER_TX" ]; then
-                iwconfig $WLN_IF txpower $WLN_POWER_TX
+            if [ "$WLN_TOGGLE_TEST" = "1" ]; then
+                WLN_TOGGLE_COUNT=$WLN_TOGGLE_ON
             elif [ "$WLN_SWING_TEST" = "1" ]; then
                 WLN_SWING_COUNT=$WLN_SWING_DWELL
                 WLN_SWING_LEVEL=$WLN_SWING_HIGH
                 WLN_SWING_CLIMB=0
-            elif [ "$WLN_TOGGLE_TEST" = "1" ]; then
-                WLN_TOGGLE_COUNT=$WLN_TOGGLE_ON
+            elif [ -n "$WLN_POWER_TX" ] && [ "$WLN_POWER_TX" != "0" ]; then
+                $IWUTILS $WLN_IF set txpower fixed $WLN_POWER_TX
+            else
+                $IWUTILS $WLN_IF set txpower auto
             fi
             return
         fi
@@ -848,34 +890,37 @@ start_wln()
     ifconfig $WLN_IF 0.0.0.0 up
     if [ "$VAP_OP" = "1" ]; then
         if [ "$WLN_WAN" = "1" ] && [ "$VAP_WAN" = "1" ]; then
-            wln_conf=$VAP_CONF22
+            WLN_CONF=$VAP_CONF22
         elif [ "$WLN_WAN" = "1" ]; then
-            wln_conf=$VAP_CONF21
+            WLN_CONF=$VAP_CONF21
         elif [ "$WLN_WAN" = "0" ] && [ "$VAP_WAN" = "1" ]; then
-            wln_conf=$VAP_CONF12
+            WLN_CONF=$VAP_CONF12
         else
-            wln_conf=$VAP_CONF11
+            WLN_CONF=$VAP_CONF11
         fi
     else
         if [ "$WLN_WDS" = "1" ] && [ "$WLN_WAN" = "1" ]; then
-            wln_conf=$WLN_CONF22
+            WLN_CONF=$WLN_CONF22
         elif [ "$WLN_WDS" = "1" ]; then
-            wln_conf=$WLN_CONF21
+            WLN_CONF=$WLN_CONF21
         elif [ "$WLN_WDS" = "0" ] && [ "$WLN_WAN" = "1" ]; then
-            wln_conf=$WLN_CONF12
+            WLN_CONF=$WLN_CONF12
         else
-            wln_conf=$WLN_CONF11
+            WLN_CONF=$WLN_CONF11
         fi
     fi
-    WLN_CHAN=$(cat $wln_conf | grep 'channel=' | cut -d '=' -f2)
-    if [ "$WLN_DBG" = "1" ]; then
-        $HOSTAPD -B -t -f $WLN_LOG $wln_conf > /dev/null 2>&1
+    WLN_CHAN=$(cat $WLN_CONF | grep 'channel=' | cut -d '=' -f2)
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "0" ]; then
+        dump_btt_phy $WLN_CHAN $BTT_CHAN_BAND
+    fi
+    if [ "$WLN_DBG" = "3" ]; then
+        $HOSTAPD -B -P $WLN_PID -t -f $WLN_LOG -d -K $WLN_CONF > /dev/null 2>&1
     elif [ "$WLN_DBG" = "2" ]; then
-        $HOSTAPD -B -t -f $WLN_LOG -d $wln_conf > /dev/null 2>&1
-    elif [ "$WLN_DBG" = "3" ]; then
-        $HOSTAPD -B -t -f $WLN_LOG -d -K $wln_conf > /dev/null 2>&1
+        $HOSTAPD -B -P $WLN_PID -t -f $WLN_LOG -d $WLN_CONF > /dev/null 2>&1
+    elif [ "$WLN_DBG" = "1" ]; then
+        $HOSTAPD -B -P $WLN_PID -t -f $WLN_LOG $WLN_CONF > /dev/null 2>&1
     else
-        $HOSTAPD -B -t $wln_conf > /dev/null 2>&1
+        $HOSTAPD -B -P $WLN_PID -t $WLN_CONF > /dev/null 2>&1
     fi
     WLN_STATE="STARTED"
     WLN_LINK_COUNT=10
@@ -885,7 +930,7 @@ start_wln()
 
 stop_wln()
 {
-    kill_all "$HOSTAPD"
+    kill_one "$WLN_PID"
     if [ -e $WLN_CTRL ]; then
         rm -rf $WLN_CTRL
     fi
@@ -897,16 +942,23 @@ stop_wln()
 init_wln()
 {
     if [ -z "$WLN_IF" ]; then
+        WLN_MAC=$MAC_PCI
+        WLN_IF=$WIFI_PCI
+        stop_wln
         return
     fi
-    WLN_MAC=$(ip addr show dev $WLN_IF | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
+    WLN_MAC=""
+    wlnif=$(ifconfig -a | grep $WLN_IF | awk '{print $1}')
+    if [ -n "$wlnif" ]; then
+        WLN_MAC=$(ip addr show dev $WLN_IF | grep 'link/' | awk '{print $2}')
+    fi
+    stop_wln
     if [ -z "$WLN_MAC" ]; then
         logger "Cannot find WLN interface $WLN_IF"
         WLN_OP=0
         WLN_IF=""
         return
     fi
-    stop_wln
     if [ "$WLN_OP" = "1" ]; then
         WLN_STATE="STARTING"
     fi
@@ -976,8 +1028,14 @@ check_sap()
         sleep 1
         return
     fi
-    pid=$(ps -e | grep hostapd | awk '{print $1}')
-    if [ -z "$pid" ]; then
+    pid=$(ps -ef | grep $SAP_CONF | awk '{print $2}')
+    fid=$(cat $SAP_PID)
+    for pi in $pid; do
+        if [ "$pi" = "$fid" ]; then
+            break
+        fi
+    done
+    if [ "$pi" != "$fid" ]; then
         if [ "$SAP_TOGGLE_TEST" = "1" ]; then
             if [ $SAP_TOGGLE_COUNT -gt 0 ]; then
                 SAP_TOGGLE_COUNT=$(($SAP_TOGGLE_COUNT - 1))
@@ -1000,14 +1058,16 @@ check_sap()
         logger "SAP ($SAP_IF) info: \"$ssid\" (bssid: $SAP_MAC)"
         SAP_SSID="$ssid"
         dump_sap
-        if [ -n "$SAP_POWER_TX" ]; then
-            iwconfig $SAP_IF txpower $SAP_POWER_TX
+        if [ "$SAP_TOGGLE_TEST" = "1" ]; then
+            SAP_TOGGLE_COUNT=$SAP_TOGGLE_ON
         elif [ "$SAP_SWING_TEST" = "1" ]; then
             SAP_SWING_COUNT=$SAP_SWING_DWELL
             SAP_SWING_LEVEL=$SAP_SWING_HIGH
             SAP_SWING_CLIMB=0
-        elif [ "$SAP_TOGGLE_TEST" = "1" ]; then
-            SAP_TOGGLE_COUNT=$SAP_TOGGLE_ON
+        elif [ -n "$SAP_POWER_TX" ] && [ "$SAP_POWER_TX" != "0" ]; then
+            $IWUTILS $SAP_IF set txpower fixed $SAP_POWER_TX
+        else
+            $IWUTILS $SAP_IF set txpower auto
         fi
         return
     fi
@@ -1019,13 +1079,19 @@ check_sap()
     if [ "$LAN_OP" = "1" ]; then
         check_lan
     fi
-    if [ -n "$SAP_POWER_TX" ]; then
-        return
-    fi
-    if [ "$SAP_SWING_TEST" = "1" ]; then
+    if [ "$SAP_TOGGLE_TEST" = "1" ]; then
+        SAP_TOGGLE_COUNT=$(($SAP_TOGGLE_COUNT - 1))
+        if [ $SAP_TOGGLE_COUNT -eq 0 ]; then
+            logger "SAP ($SAP_IF) info: toggle interface down..."
+            SAP_TOGGLE_COUNT=$SAP_TOGGLE_OFF
+            stop_sap
+            SAP_SSID=""
+            dump_sap
+        fi
+    elif [ "$SAP_SWING_TEST" = "1" ]; then
         if [ $SAP_SWING_COUNT -eq $SAP_SWING_DWELL ]; then
-            logger "SAP ($SAP_IF) info: Tx power $SAP_SWING_LEVEL dBm"
-            iwconfig $SAP_IF txpower $SAP_SWING_LEVEL
+            logger "SAP ($SAP_IF) info: Tx power $SAP_SWING_LEVEL mBm"
+            $IWUTILS $SAP_IF set txpower fixed $SAP_SWING_LEVEL
         fi
         SAP_SWING_COUNT=$(($SAP_SWING_COUNT - 1))
         if [ $SAP_SWING_COUNT -eq 0 ]; then
@@ -1043,15 +1109,6 @@ check_sap()
                     SAP_SWING_CLIMB=0
                 fi
             fi
-        fi
-    elif [ "$SAP_TOGGLE_TEST" = "1" ]; then
-        SAP_TOGGLE_COUNT=$(($SAP_TOGGLE_COUNT - 1))
-        if [ $SAP_TOGGLE_COUNT -eq 0 ]; then
-            logger "SAP ($SAP_IF) info: toggle interface down..."
-            SAP_TOGGLE_COUNT=$SAP_TOGGLE_OFF
-            stop_sap
-            SAP_SSID=""
-            dump_sap
         fi
     fi
 }
@@ -1074,28 +1131,28 @@ link_sap()
 start_sap()
 {
     if [ "$SAP_WDS" = "1" ] && [ "$SAP_WAN" = "1" ]; then
-       sap_conf=$SAP_CONF22
+       SAP_CONF=$SAP_CONF22
     elif [ "$SAP_WDS" = "1" ]; then
-        sap_conf=$SAP_CONF21
+        SAP_CONF=$SAP_CONF21
     elif [ "$SAP_WDS" = "0" ] && [ "$SAP_WAN" = "1" ]; then
-        sap_conf=$SAP_CONF12
+        SAP_CONF=$SAP_CONF12
     else
-        sap_conf=$SAP_CONF11
+        SAP_CONF=$SAP_CONF11
     fi
     if [ $SAP_CHAN -ne $STA_CHAN ]; then
-        sed '/channel=/d' $sap_conf > /tmp/hostapd-sap0.conf
-        mv -f /tmp/hostapd-sap0.conf $sap_conf
-        echo channel=$STA_CHAN >> $sap_conf
+        sed '/channel=/d' $SAP_CONF > /tmp/hostapd-sap0.conf
+        mv -f /tmp/hostapd-sap0.conf $SAP_CONF
+        echo channel=$STA_CHAN >> $SAP_CONF
         SAP_CHAN=$STA_CHAN
     fi
-    if [ "$SAP_DBG" = "1" ]; then
-        $HOSTAPD -B -t -f $SAP_LOG $sap_conf > /dev/null 2>&1
+    if [ "$SAP_DBG" = "3" ]; then
+        $HOSTAPD -B -P $SAP_PID -t -f $SAP_LOG -d -K $SAP_CONF > /dev/null 2>&1
     elif [ "$SAP_DBG" = "2" ]; then
-        $HOSTAPD -B -t -f $SAP_LOG -d $sap_conf > /dev/null 2>&1
-    elif [ "$SAP_DBG" = "3" ]; then
-        $HOSTAPD -B -t -f $SAP_LOG -d -K $sap_conf > /dev/null 2>&1
+        $HOSTAPD -B -P $SAP_PID -t -f $SAP_LOG -d $SAP_CONF > /dev/null 2>&1
+    elif [ "$SAP_DBG" = "1" ]; then
+        $HOSTAPD -B -P $SAP_PID -t -f $SAP_LOG $SAP_CONF > /dev/null 2>&1
     else
-        $HOSTAPD -B -t $sap_conf > /dev/null 2>&1
+        $HOSTAPD -B -P $SAP_PID -t $SAP_CONF > /dev/null 2>&1
     fi
     SAP_LINK_COUNT=10
     SAP_SWING_COUNT=0
@@ -1104,41 +1161,42 @@ start_sap()
 
 stop_sap()
 {
-    kill_all "$HOSTAPD"
+    kill_one "$SAP_PID"
     if [ -e $SAP_CTRL ]; then
         rm -rf $SAP_CTRL
     fi
     if [ -n "$SAP_MAC" ]; then
         ifconfig $SAP_IF down
+        $IWUTILS dev $SAP_IF del
     fi
 }
 
 init_sap()
 {
-    if [ -z "$SAP_IF" ] || [ -z "$STA_MAC" ]; then
+    if [ -z "$SAP_IF" ]; then
+        sapif=$(ifconfig -a | grep sap0 | awk '{print $1}')
+        if [ -n "$sapif" ]; then
+            SAP_MAC=$(ip addr show dev sap0 | grep 'link/' | awk '{print $2}')
+            SAP_IF=sap0
+        fi
+        stop_sap
         return
     fi
-    SAP_MAC=""
-    sap_if=$(ifconfig -a | grep $SAP_IF | awk '{print $1}')
-    if [ -n "$sap_if" ]; then
+    sapif=$(ifconfig -a | grep $SAP_IF | awk '{print $1}')
+    if [ -n "$sapif" ]; then
         SAP_MAC=$(ip addr show dev $SAP_IF | grep 'link/' | awk '{print $2}')
     fi
     stop_sap
-    if [ "$SAP_OP" = "1" ]; then
+    if [ "$SAP_OP" = "1" ] && [ -n "$STA_MAC" ]; then
         mac2=$(echo $STA_MAC | cut -d ':' -f2)
         mac3=$(echo $STA_MAC | cut -d ':' -f3)
         mac4=$(echo $STA_MAC | cut -d ':' -f4)
         mac5=$(echo $STA_MAC | cut -d ':' -f5)
         mac6=$(echo $STA_MAC | cut -d ':' -f6)
         mac="fe:$mac2:$mac3:$mac4:$mac5:$mac6"
-        if [ "$SAP_MAC" != "$mac" ]; then
-            if [ -n "$SAP_MAC" ]; then
-                $IWUTILS dev $SAP_IF del
-            fi
-            SAP_MAC="$mac"
-            $IWUTILS dev $STA_IF interface add $SAP_IF type managed > /dev/null 2>&1
-            ip link set dev $SAP_IF address $SAP_MAC
-        fi
+        SAP_MAC="$mac"
+        $IWUTILS dev $STA_IF interface add $SAP_IF type managed > /dev/null 2>&1
+        ip link set dev $SAP_IF address $SAP_MAC
         ifconfig $SAP_IF 0.0.0.0 up
         SAP_SSID=""
         SAP_CHAN=0
@@ -1281,7 +1339,7 @@ dump_sta()
             else
                 echo "  STA_CHAN=$STA_CHAN"
             fi
-            echo "  STA_WDS=$SAP_WDS"
+            echo "  STA_WDS=$PCI_WDS"
         fi
     } >> $STA_INFO
 }
@@ -1390,6 +1448,7 @@ bssid_sta()
         STA_CHAN=$($IWUTILS dev $STA_IF info | grep channel | awk '{print $2}') > /dev/null 2>&1
         logger "STA ($STA_IF) info: \"$STA_SSID\" (bssid: $STA_BSSID channel: $STA_CHAN)"
     fi
+    STA_RATE=""
     STA_RSSI=""
     STA_WAN_GW=""
     STA_WAN_IP=""
@@ -1404,11 +1463,29 @@ lost_sta()
     if [ "$ETH_OP" = "1" ] && [ $ETH_PHY_UP -eq 1 ]; then
         ETH_STATE="ATTACHED"
     fi
+    if [ "$BTT_OP" = "1" ]; then
+        pid=$(pgrep -f $BTTNODE)
+        if [ -n "$pid" ]; then
+            kill $pid
+        fi
+        if [ -e "$PHY_INFO" ]; then
+            rm -f $PHY_INFO
+        fi
+        if [ -e "$BTT_INFO" ]; then
+            rm -f $BTT_INFO
+        fi
+        bttlocal=$(($BTT_LOCAL % 2))
+        if [ "$bttlocal" = "0" ]; then
+            reset_wlx
+        fi
+    fi
     if [ "$SAP_OP" = "1" ]; then
         reset_sap
     fi
-    STA_BSSID=""
     clean_sta
+    STA_BSSID=""
+    stop_sta
+    STA_STATE="STARTING"
 }
 
 check_sta()
@@ -1427,46 +1504,51 @@ check_sta()
         sleep 1
         return
     fi
-    wpa_sta=$(ps -ef | grep wpa_supplicant-$STA | awk '{print $2}')
-    if [ -z "$wpa_sta" ]; then
-        if [ -n "$STA_BSSID" ]; then
-            lost_sta
+    staphy=$(cat /sys/class/net/$STA_IF/operstate) > /dev/null 2>&1
+    if [ "$staphy" = "down" ]; then
+        ifconfig $STA_IF up
+        return
+    fi
+    pid=$(ps -ef | grep $STA_CONF | awk '{print $2}')
+    fid=$(cat $STA_PID)
+    for pi in $pid; do
+        if [ "$pi" = "$fid" ]; then
+            break
         fi
-        stop_sta
-        STA_STATE="STARTING"
+    done
+    if [ "$pi" != "$fid" ]; then
+        lost_sta
         return
     fi
     bssid=$($IWUTILS dev $STA_IF link | grep Connected | awk '{print $3}') > /dev/null 2>&1
+    if [ -n "$bssid" ] && [ "$bssid" != "$STA_BSSID" ]; then
+        lost_sta
+        return
+    fi
     if [ -z "$bssid" ]; then
-        if [ -n "$STA_BSSID" ]; then
+        STA_LOST_BSSID=$(($STA_LOST_BSSID + 1))
+        if [ $STA_LOST_BSSID -ge 3 ]; then
+            STA_LOST_BSSID=0
             lost_sta
         fi
         return
     fi
-    if [ "$bssid" != "$STA_BSSID" ]; then
-        bssid_sta "$bssid"
-        dump_sta
-        if [ -n "$STA_WAN_GW" ] && [ "$STA_PING" = "1" ]; then
-            STA_PING_PUBLIC=1
-            STA_PING_COUNT=1
-            STA_WAN_COUNT=0
-        fi
-    fi
+    STA_LOST_BSSID=0
+    BTT_PHY_UPDATE=0
     rssi=$($IWUTILS dev $STA_IF link | grep 'signal:' | awk '{print $2}') > /dev/null 2>&1    
     if [ -z "$rssi" ]; then
-        if [ -n "$STA_BSSID" ]; then
-            lost_sta
-        fi
         return
     fi
     if [ -z "$STA_RSSI" ]; then
         STA_RSSI=$rssi
-        logger "STA ($STA_IF) info: rssi $rssi dBm"
+        STA_RSSI_SHOW=$STX_RSSI
+        logger "STA ($STA_IF) info: RSSI $STA_RSSI_SHOW dBm"
         STA_RSSI_2=$STA_RSSI
         STA_RSSI_1=$STA_RSSI
         STA_RSSI_0=$STA_RSSI
         STA_ROAM_FULL_SCAN=50
         STA_ROAM_FAST_SCAN=0
+        BTT_PHY_UPDATE=1
         if [ "$SAP_OP" = "1" ]; then
             start_sap
         fi
@@ -1476,9 +1558,30 @@ check_sta()
     STA_RSSI_1=$STA_RSSI_0
     STA_RSSI_0=$rssi
     rssi=$((($STA_RSSI_3 + (2 * $STA_RSSI_2) + (2 * $STA_RSSI_1) + (3 * $STA_RSSI_0)) / 8))
-    if [ $rssi -gt $(($STA_RSSI + $STA_RSSI_STEP)) ] || [ $rssi -lt $(($STA_RSSI - $STA_RSSI_STEP)) ]; then
+    if [ $rssi -gt $(($STA_RSSI_SHOW + $STA_RSSI_STEP)) ] || [ $rssi -lt $(($STA_RSSI_SHOW - $STA_RSSI_STEP)) ]; then
+        STA_RSSI_SHOW=$rssi
+        logger "STA ($STA_IF) info: RSSI $STA_RSSI_SHOW dBm"
+    fi
+    if [ "$rssi" != "$STA_RSSI" ]; then
+        if [ $rssi -gt $(($STA_RSSI + 2)) ] || [ $rssi -lt $(($STA_RSSI - 2)) ]; then
+            BTT_PHY_UPDATE=1
+        fi
         STA_RSSI=$rssi
-        logger "STA ($STA_IF) info: rssi $rssi dBm"
+    fi
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
+        rate=$($IWUTILS dev $STA_IF link | grep 'bitrate:' | awk '{print $3}') > /dev/null 2>&1
+        if [ "$rate" != "$STA_RATE" ]; then
+            BTT_PHY_UPDATE=1
+            STA_RATE=$rate
+        fi
+        if [ "$BTT_PHY_UPDATE" = "1" ] && [ "$STA_RATE" != "1.0" ]; then
+            dump_btt_phy $STA_RSSI $STA_RATE $WLX_CHAN $BTT_CHAN_BAND
+        fi
+        pid=$(pgrep -f $BTTNODE)
+        if [ -z "$pid" ]; then
+            $BTTNODE -l $WLX_IF -m $BTT_COUNT -n $BTT_LOCAL -p $STA_BSSID -w $STA_IF &
+            return
+        fi
     fi
     if [ "$STA_ROAM_OFF" = "0" ]; then
         STA_ROAM_FULL_SCAN=$(($STA_ROAM_FULL_SCAN + 1))
@@ -1486,17 +1589,17 @@ check_sta()
         if [ $STA_ROAM_FULL_SCAN -ge 55 ] && [ $STA_ROAM_FAST_SCAN -ge 5 ]; then
             STA_ROAM_FULL_SCAN=0
             STA_ROAM_FAST_SCAN=0
-            logger "STA ($STA_IF) info: start roam full scan (rssi: $rssi dBm)"
+            logger "STA ($STA_IF) info: start roam full scan (RSSI: $STA_RSSI dBm)"
             wpa_cli -p $STA_CTRL scan > /dev/null 2>&1
             return
         fi
-        if [ $rssi -le -75 ] && [ $STA_ROAM_FAST_SCAN -ge 5 ] && [ $STA_ROAM_FULL_SCAN -ge 10 ]; then
+        if [ $STA_RSSI -le -75 ] && [ $STA_ROAM_FAST_SCAN -ge 5 ] && [ $STA_ROAM_FULL_SCAN -ge 10 ]; then
             STA_ROAM_FAST_SCAN=0
-        elif [ $rssi -le -65 ] && [ $STA_ROAM_FAST_SCAN -ge 10 ]; then
+        elif [ $STA_RSSI -le -65 ] && [ $STA_ROAM_FAST_SCAN -ge 10 ]; then
             STA_ROAM_FAST_SCAN=0
         fi
         if [ $STA_ROAM_FAST_SCAN -eq 0 ]; then
-            logger "STA ($STA_IF) info: start roam fast scan (rssi: $rssi dBm)"
+            logger "STA ($STA_IF) info: start roam fast scan (RSSI: $STA_RSSI dBm)"
             if [ -n "$SSIDSta" ]; then
                 wpa_cli -p $STA_CTRL scan $SSIDSta > /dev/null 2>&1
             else
@@ -1504,11 +1607,6 @@ check_sta()
             fi
             return
         fi
-    fi
-    sta_phy=$(cat /sys/class/net/$STA_IF/operstate) > /dev/null 2>&1
-    if [ "$sta_phy" = "down" ]; then
-        ifconfig $STA_IF up
-        return
     fi
     if [ "$SAP_OP" = "1" ]; then
         check_sap
@@ -1625,6 +1723,10 @@ check_sta()
         STA_DHCP_STARTED=0
         STA_WAN_GW="$sta_gw"
         logger "WAN ($STA_WAN_IF) info: $STA_WAN_IP (gateway: $STA_WAN_GW)"
+        pid=$(pgrep -f webalive)
+        if [ -n "$pid" ]; then
+            kill $pid
+        fi
         STA_PING_PUBLIC=1
         STA_PING_COUNT=3
         STA_WAN_COUNT=15
@@ -1665,6 +1767,20 @@ check_sta()
     if [ ! -e "$WAN_INFO" ]; then
         dump_wan_sta
     fi
+    if [ "$BRI_OP" = "2" ] && [ "$BRI_ALIVE" = "1" ]; then
+        pid=$(pgrep -f webalive)
+        if [ -z "$pid" ]; then
+            webalive -s $BRI_ALIVE_IP -m $BRI_MAC &
+        fi
+        return
+    fi
+    if [ "$STA_ALIVE" = "1" ]; then
+        pid=$(pgrep -f webalive)
+        if [ -z "$pid" ]; then
+            webalive -s $STA_ALIVE_IP -m $STA_MAC &
+        fi
+        return
+    fi
     if [ $STA_WAN_COUNT -gt 0 ]; then
         STA_WAN_COUNT=$(($STA_WAN_COUNT - 1))
         return
@@ -1687,12 +1803,19 @@ check_sta()
 
 link_sta()
 {
-    pid=$(ps -e | grep wpa_supplicant | awk '{print $1}')
-    if [ -n "$pid" ]; then
+    pid=$(ps -ef | grep $STA_CONF | awk '{print $2}')
+    fid=$(cat $STA_PID)
+    for pi in $pid; do
+        if [ "$pi" = "$fid" ]; then
+            break
+        fi
+    done
+    if [ "$pi" = "$fid" ]; then
         bssid=$($IWUTILS dev $STA_IF link | grep Connected | awk '{print $3}') > /dev/null 2>&1
         if [ -n "$bssid" ]; then
             bssid_sta "$bssid"
             dump_sta
+            STA_LOST_BSSID=0
             STA_STATE="COMPLETED"
             return
         fi
@@ -1709,22 +1832,22 @@ start_sta()
 {
     ifconfig $STA_IF 0.0.0.0 up
     if [ "$BRI_OP" = "2" ]; then
-        if [ "$STA_DBG" = "1" ]; then
-            $WPASUPP -i $STA_IF -B -D "nl80211" -P $STA_PID -b $BRI_IF -t -f $STA_LOG -c $STA_CONF > /dev/null 2>&1
+        if [ "$STA_DBG" = "3" ]; then
+            $WPASUPP -i $STA_IF -B -D "nl80211" -P $STA_PID -b $BRI_IF -t -f $STA_LOG -d -K -c $STA_CONF > /dev/null 2>&1
         elif [ "$STA_DBG" = "2" ]; then
             $WPASUPP -i $STA_IF -B -D "nl80211" -P $STA_PID -b $BRI_IF -t -f $STA_LOG -d -c $STA_CONF > /dev/null 2>&1
-        elif [ "$STA_DBG" = "3" ]; then
-            $WPASUPP -i $STA_IF -B -D "nl80211" -P $STA_PID -b $BRI_IF -t -f $STA_LOG -d -K -c $STA_CONF > /dev/null 2>&1
+        elif [ "$STA_DBG" = "1" ]; then
+            $WPASUPP -i $STA_IF -B -D "nl80211" -P $STA_PID -b $BRI_IF -t -f $STA_LOG -c $STA_CONF > /dev/null 2>&1
         else
             $WPASUPP -i $STA_IF -B -D "nl80211" -P $STA_PID -b $BRI_IF -t -s -c $STA_CONF > /dev/null 2>&1
         fi
     else
-        if [ "$STA_DBG" = "1" ]; then
-            $WPASUPP -i $STA_IF -B -D "nl80211" -P $STA_PID -t -f $STA_LOG -c $STA_CONF > /dev/null 2>&1
+        if [ "$STA_DBG" = "3" ]; then
+            $WPASUPP -i $STA_IF -B -D "nl80211" -P $STA_PID -t -f $STA_LOG -d -K -c $STA_CONF > /dev/null 2>&1
         elif [ "$STA_DBG" = "2" ]; then
             $WPASUPP -i $STA_IF -B -D "nl80211" -P $STA_PID -t -f $STA_LOG -d -c $STA_CONF > /dev/null 2>&1
-        elif [ "$STA_DBG" = "3" ]; then
-            $WPASUPP -i $STA_IF -B -D "nl80211" -P $STA_PID -t -f $STA_LOG -d -K -c $STA_CONF > /dev/null 2>&1
+        elif [ "$STA_DBG" = "1" ]; then
+            $WPASUPP -i $STA_IF -B -D "nl80211" -P $STA_PID -t -f $STA_LOG -c $STA_CONF > /dev/null 2>&1
         else
             $WPASUPP -i $STA_IF -B -D "nl80211" -P $STA_PID -t -s -c $STA_CONF > /dev/null 2>&1
         fi
@@ -1733,11 +1856,12 @@ start_sta()
     STA_SSID=""
     STA_STATE="STARTED"
     STA_LINK_COUNT=30
+    dump_sta
 }
 
 stop_sta()
 {
-    kill_all "$WPASUPP"
+    kill_one "$STA_PID"
     if [ -e $STA_CTRL ]; then
         rm -rf $STA_CTRL
     fi
@@ -1756,16 +1880,23 @@ stop_sta()
 init_sta()
 {
     if [ -z "$STA_IF" ]; then
+        STA_MAC=$MAC_PCI
+        STA_IF=$WIFI_PCI
+        stop_sta
         return
     fi
-    STA_MAC=$(ip addr show dev $STA_IF | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
+    STA_MAC=""
+    staif=$(ifconfig -a | grep $STA_IF | awk '{print $1}')
+    if [ -n "$staif" ]; then
+        STA_MAC=$(ip addr show dev $STA_IF | grep 'link/' | awk '{print $2}')
+    fi
+    stop_sta
     if [ -z "$STA_MAC" ]; then
         logger "Cannot find STA interface $STA_IF"
         STA_OP=0
         STA_IF=""
         return
     fi
-    stop_sta
     if [ "$STA_OP" = "1" ]; then
         ssid_sta
         if [ "$BRI_OP" = "2" ]; then
@@ -1789,7 +1920,7 @@ dump_wlx()
         echo "  WLX_MAC=$WLX_MAC"
         if [ -n "$WLX_SSID" ]; then
             echo "  WLX_SSID=\"$WLX_SSID\""
-            echo "  WLX_CHAN=$WLX_CHAN"
+            echo "  WLX_CHAN=$WLX_CHAN$_BOND"
             echo "  WLX_WDS=$WLX_WDS"
         fi
     } >> $WLX_INFO
@@ -1823,6 +1954,15 @@ ssid_wlx()
 
 reset_wlx()
 {
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ]; then
+        pid=$(pgrep -f $BTTNODE)
+        if [ -n "$pid" ]; then
+            kill $pid
+        fi
+        if [ -e "$BTT_INFO" ]; then
+            rm -f $BTT_INFO
+        fi
+    fi
     stop_wlx
     WLX_STATE="STARTING"
     WLX_SSID=""
@@ -1842,8 +1982,19 @@ check_wlx()
         sleep 1
         return
     fi
-    pid=$(ps -e | grep hostapd | awk '{print $1}')
-    if [ -z "$pid" ]; then
+    wlxphy=$(cat /sys/class/net/$WLX_IF/operstate) > /dev/null 2>&1
+    if [ "$wlxphy" = "down" ]; then
+        ifconfig $WLX_IF up
+        return
+    fi
+    pid=$(ps -ef | grep $WLX_CONF | awk '{print $2}')
+    fid=$(cat $WLX_PID)
+    for pi in $pid; do
+        if [ "$pi" = "$fid" ]; then
+            break
+        fi
+    done
+    if [ "$pi" != "$fid" ]; then
         if [ "$WLX_TOGGLE_TEST" = "1" ]; then
             if [ $WLX_TOGGLE_COUNT -gt 0 ]; then
                 WLX_TOGGLE_COUNT=$(($WLX_TOGGLE_COUNT - 1))
@@ -1862,10 +2013,12 @@ check_wlx()
         reset_wlx
         return
     fi
-    wlx_phy=$(cat /sys/class/net/$WLX_IF/operstate) > /dev/null 2>&1
-    if [ "$wlx_phy" = "down" ]; then
-        ifconfig $WLX_IF up
-        return
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ]; then
+        pid=$(pgrep -f $BTTNODE)
+        if [ -z "$pid" ]; then
+            $BTTNODE -l $WLX_IF -m $BTT_COUNT -n $BTT_LOCAL &
+            return
+        fi
     fi
     if [ "$LAN_OP" = "1" ]; then
         check_lan
@@ -1879,21 +2032,55 @@ check_wlx()
             WLX_SSID=""
             dump_wlx
         fi
+    elif [ "$WLX_SWING_TEST" = "1" ]; then
+        if [ $WLX_SWING_COUNT -eq $WLX_SWING_DWELL ]; then
+            logger "WLX ($WLX_IF) info: Tx power $WLX_SWING_LEVEL mBm"
+            $IWUTILS $WLX_IF set txpower fixed $WLX_SWING_LEVEL
+        fi
+        WLX_SWING_COUNT=$(($WLX_SWING_COUNT - 1))
+        if [ $WLX_SWING_COUNT -eq 0 ]; then
+            WLX_SWING_COUNT=$WLX_SWING_DWELL
+            if [ $WLX_SWING_CLIMB -eq 0 ]; then
+                WLX_SWING_LEVEL=$(($WLX_SWING_LEVEL - $WLX_SWING_STEP))
+                if [ $WLX_SWING_LEVEL -lt $WLX_SWING_LOW ]; then
+                    WLX_SWING_LEVEL=$WLX_SWING_LOW
+                    WLX_SWING_CLIMB=1
+                fi
+            else
+                WLX_SWING_LEVEL=$(($WLX_SWING_LEVEL + $WLX_SWING_STEP))
+                if [ $WLX_SWING_LEVEL -gt $WLX_SWING_HIGH ]; then
+                    WLX_SWING_LEVEL=$WLX_SWING_HIGH
+                    WLX_SWING_CLIMB=0
+                fi
+            fi
+        fi
     fi
 }
 
 link_wlx()
 {
-    pid=$(ps -e | grep hostapd | awk '{print $1}')
-    if [ -n "$pid" ]; then
+    pid=$(ps -ef | grep $WLX_CONF | awk '{print $2}')
+    fid=$(cat $WLX_PID)
+    for pi in $pid; do
+        if [ "$pi" = "$fid" ]; then
+            break
+        fi
+    done
+    if [ "$pi" = "$fid" ]; then
         ssid=$(ssid_wlx $WLX_IF)
         if [ -n "$ssid" ]; then
-            logger "WLX ($WLX_IF) info: \"$ssid\" (bssid: $WLX_MAC channel: $WLX_CHAN)"
+            logger "WLX ($WLX_IF) info: \"$ssid\" (bssid: $WLX_MAC channel: $WLX_CHAN$_BOND)"
             WLX_STATE="COMPLETED"
             WLX_SSID="$ssid"
             dump_wlx
             if [ "$WLX_TOGGLE_TEST" = "1" ]; then
                 WLX_TOGGLE_COUNT=$WLX_TOGGLE_ON
+            elif [ "$WLX_SWING_TEST" = "1" ]; then
+                WLX_SWING_COUNT=$WLX_SWING_DWELL
+                WLX_SWING_LEVEL=$WLX_SWING_HIGH
+                WLX_SWING_CLIMB=0
+            elif [ -n "$WLX_POWER_TX" ] && [ "$WLX_POWER_TX" != "0" ]; then
+                $IWUTILS $WLX_IF set txpower fixed $WLX_POWER_TX
             fi
             return
         fi
@@ -1911,19 +2098,36 @@ start_wlx()
 {
     ifconfig $WLX_IF 0.0.0.0 up
     if [ "$WLX_WAN" = "1" ]; then
-        wlx_conf=$WLX_CONF2
+        WLX_CONF=$WLX_CONF2
     else
-        wlx_conf=$WLX_CONF1
+        WLX_CONF=$WLX_CONF1
     fi
-    WLX_CHAN=$(cat $wlx_conf | grep 'channel=' | cut -d '=' -f2)
-    if [ "$WLX_DBG" = "1" ]; then
-        $HOSTAPD -B -t -f $WLX_LOG $wlx_conf > /dev/null 2>&1
+    WLX_CHAN=$(cat $WLX_CONF | grep 'channel=' | cut -d '=' -f2)
+    if [ $WLX_CHAN -gt 30 ]; then
+        _BOND=""
+        bond=$(cat $WLX_CONF | grep 'HT40-')
+        if [ -n "$bond" ]; then
+            _BOND="-"
+            BTT_CHAN_BAND="40-"
+        else
+            bond=$(cat $WLX_CONF | grep 'HT40+')
+            if [ -n "$bond" ]; then
+                _BOND="+"
+                BTT_CHAN_BAND="40+"
+            fi
+        fi
+    fi
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ]; then
+        dump_btt_phy $WLX_CHAN $BTT_CHAN_BAND
+    fi
+    if [ "$WLX_DBG" = "3" ]; then
+        $HOSTAPD -B -P $WLX_PID -t -f $WLX_LOG -d -K $WLX_CONF > /dev/null 2>&1
     elif [ "$WLX_DBG" = "2" ]; then
-        $HOSTAPD -B -t -f $WLX_LOG -d $wlx_conf > /dev/null 2>&1
-    elif [ "$WLX_DBG" = "3" ]; then
-        $HOSTAPD -B -t -f $WLX_LOG -d -K $wlx_conf > /dev/null 2>&1
+        $HOSTAPD -B -P $WLX_PID -t -f $WLX_LOG -d $WLX_CONF > /dev/null 2>&1
+    elif [ "$WLX_DBG" = "1" ]; then
+        $HOSTAPD -B -P $WLX_PID -t -f $WLX_LOG $WLX_CONF > /dev/null 2>&1
     else
-        $HOSTAPD -B -t $wlx_conf > /dev/null 2>&1
+        $HOSTAPD -B -P $WLX_PID -t $WLX_CONF > /dev/null 2>&1
     fi
     WLX_STATE="STARTED"
     WLX_LINK_COUNT=10
@@ -1933,7 +2137,7 @@ start_wlx()
 
 stop_wlx()
 {
-    kill_all "$HOSTAPD"
+    kill_one "$WLX_PID"
     if [ -e $WLX_CTRL ]; then
         rm -rf $WLX_CTRL
     fi
@@ -1945,16 +2149,23 @@ stop_wlx()
 init_wlx()
 {
     if [ -z "$WLX_IF" ]; then
+        WLX_MAC=$MAC_USB
+        WLX_IF=$WIFI_USB
+        stop_wlx
         return
     fi
-    WLX_MAC=$(ip addr show dev $WLX_IF | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
+    WLX_MAC=""
+    wlxif=$(ifconfig -a | grep $WLX_IF | awk '{print $1}')
+    if [ -n "$wlxif" ]; then
+        WLX_MAC=$(ip addr show dev $WLX_IF | grep 'link/' | awk '{print $2}')
+    fi
+    stop_wlx
     if [ -z "$WLX_MAC" ]; then
         logger "Cannot find WLX interface $WLX_IF"
         WLX_OP=0
         WLX_IF=""
         return
     fi
-    stop_wlx
     if [ "$WLX_OP" = "1" ]; then
         WLX_STATE="STARTING"
     fi
@@ -2174,6 +2385,7 @@ bssid_stx()
     fi
     STX_CHAN=$($IWUTILS dev $STX_IF link | grep freq | awk '{print $2}') > /dev/null 2>&1
     logger "STX ($STX_IF) info: \"$STX_SSID\" (bssid: $STX_BSSID freq: $STX_CHAN)"
+    STX_RATE=""
     STX_RSSI=""
     STX_WAN_GW=""
     STX_WAN_IP=""
@@ -2185,8 +2397,26 @@ bssid_stx()
 lost_stx()
 {
     logger "STX ($STX_IF) info: lost AP (bssid: $STX_BSSID)"
-    STX_BSSID=""
+    if [ "$BTT_OP" = "1" ] && [ "$STA_OP" = "0" ]; then
+        pid=$(pgrep -f $BTTNODE)
+        if [ -n "$pid" ]; then
+            kill $pid
+        fi
+        if [ -e "$PHY_INFO" ]; then
+            rm -f $PHY_INFO
+        fi
+        if [ -e "$BTT_INFO" ]; then
+            rm -f $BTT_INFO
+        fi
+        bttlocal=$(($BTT_LOCAL % 2))
+        if [ "$bttlocal" = "0" ]; then
+            reset_wln
+        fi
+    fi
     clean_stx
+    STX_BSSID=""
+    stop_stx
+    STX_STATE="STARTING"
 }
 
 check_stx()
@@ -2202,55 +2432,81 @@ check_stx()
         sleep 1
         return
     fi
-    wpa_stx=$(ps -ef | grep wpa_supplicant-$STX | awk '{print $2}')
-    if [ -z "$wpa_stx" ]; then
-        if [ -n "$STX_BSSID" ]; then
-            lost_stx
+    stxphy=$(cat /sys/class/net/$STX_IF/operstate) > /dev/null 2>&1
+    if [ "$stxphy" = "down" ]; then
+        ifconfig $STX_IF up
+        return
+    fi
+    pid=$(ps -ef | grep $STX_CONF | awk '{print $2}')
+    fid=$(cat $STX_PID)
+    for pi in $pid; do
+        if [ "$pi" = "$fid" ]; then
+            break
         fi
-        stop_stx
-        STX_STATE="STARTING"
+    done
+    if [ "$pi" != "$fid" ]; then
+        lost_stx
         return
     fi
     bssid=$($IWUTILS dev $STX_IF link | grep Connected | awk '{print $3}') > /dev/null 2>&1
+    if [ -n "$bssid" ] && [ "$bssid" != "$STX_BSSID" ]; then
+        lost_stx
+        return
+    fi
     if [ -z "$bssid" ]; then
-        if [ -n "$STX_BSSID" ]; then
+        STX_LOST_BSSID=$(($STX_LOST_BSSID + 1))
+        if [ $STX_LOST_BSSID -ge 3 ]; then
+            STX_LOST_BSSID=0
             lost_stx
         fi
         return
     fi
-    if [ "$bssid" != "$STX_BSSID" ]; then
-        bssid_stx "$bssid"
-        dump_stx
-        if [ -n "$STX_WAN_GW" ] && [ "$STX_PING" = "1" ]; then
-            STX_PING_PUBLIC=1
-            STX_PING_COUNT=1
-            STX_WAN_COUNT=0
-        fi
-    fi
-    rssi=$($IWUTILS dev $STX_IF link | grep 'signal:' | awk '{print $2}') > /dev/null 2>&1    
+    STX_LOST_BSSID=0
+    BTT_PHY_UPDATE=0
+    rssi=$($IWUTILS dev $STX_IF link | grep 'signal:' | awk '{print $2}') > /dev/null 2>&1
     if [ -z "$rssi" ]; then
-        if [ -n "$STX_BSSID" ]; then
-            lost_stx
-        fi
         return
     fi
     if [ -z "$STX_RSSI" ]; then
         STX_RSSI=$rssi
-        logger "STX ($STX_IF) info: rssi $rssi dBm"
+        STX_RSSI_SHOW=$STX_RSSI
+        logger "STX ($STX_IF) info: RSSI $STX_RSSI_SHOW dBm"
         STX_RSSI_2=$STX_RSSI
         STX_RSSI_1=$STX_RSSI
         STX_RSSI_0=$STX_RSSI
         STX_ROAM_FULL_SCAN=50
         STX_ROAM_FAST_SCAN=0
+        BTT_PHY_UPDATE=1
     fi
     STX_RSSI_3=$STX_RSSI_2
     STX_RSSI_2=$STX_RSSI_1
     STX_RSSI_1=$STX_RSSI_0
     STX_RSSI_0=$rssi
-    rssi=$((($STX_RSSI_3 + (2 * $STX_RSSI_2) + (2 * $STX_RSSI_1) + (3 * $STX_RSSI_0)) / 8))
-    if [ $rssi -gt $(($STX_RSSI + $STX_RSSI_STEP)) ] || [ $rssi -lt $(($STX_RSSI - $STX_RSSI_STEP)) ]; then
+    rssi=$((((2 * $STX_RSSI_3) + (2 * $STX_RSSI_2) + (2 * $STX_RSSI_1) + (2 * $STX_RSSI_0)) / 8))
+    if [ $rssi -gt $(($STX_RSSI_SHOW + $STX_RSSI_STEP)) ] || [ $rssi -lt $(($STX_RSSI_SHOW - $STX_RSSI_STEP)) ]; then
+        STX_RSSI_SHOW=$rssi
+        logger "STX ($STX_IF) info: RSSI $STX_RSSI_SHOW dBm"
+    fi
+    if [ "$rssi" != "$STX_RSSI" ]; then
+        if [ $rssi -gt $(($STX_RSSI + 2)) ] || [ $rssi -lt $(($STX_RSSI - 2)) ]; then
+            BTT_PHY_UPDATE=1
+        fi
         STX_RSSI=$rssi
-        logger "STX ($STX_IF) info: rssi $rssi dBm"
+    fi
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ "$STA_OP" = "0" ]; then
+        rate=$($IWUTILS dev $STX_IF link | grep 'bitrate:' | awk '{print $3}') > /dev/null 2>&1
+        if [ "$rate" != "$STX_RATE" ]; then
+            BTT_PHY_UPDATE=1
+            STX_RATE=$rate
+        fi
+        if [ "$BTT_PHY_UPDATE" = "1" ] && [ "$STX_RATE" != "1.0" ]; then
+            dump_btt_phy $STX_RSSI $STX_RATE $WLN_CHAN $BTT_CHAN_BAND
+        fi
+        pid=$(pgrep -f $BTTNODE)
+        if [ -z "$pid" ]; then
+            $BTTNODE -l $WLN_IF -m $BTT_COUNT -n $BTT_LOCAL -p $STX_BSSID -w $STX_IF &
+            return
+        fi
     fi
     if [ "$STX_ROAM_OFF" = "0" ]; then
         STX_ROAM_FULL_SCAN=$(($STX_ROAM_FULL_SCAN + 1))
@@ -2258,17 +2514,17 @@ check_stx()
         if [ $STX_ROAM_FULL_SCAN -ge 55 ] && [ $STX_ROAM_FAST_SCAN -ge 5 ]; then
             STX_ROAM_FULL_SCAN=0
             STX_ROAM_FAST_SCAN=0
-            logger "STX ($STX_IF) info: start roam full scan (rssi: $rssi dBm)"
+            logger "STX ($STX_IF) info: start roam full scan (RSSI: $STX_RSSI dBm)"
             wpa_cli -p $STX_CTRL scan > /dev/null 2>&1
             return
         fi
-        if [ $rssi -le -75 ] && [ $STX_ROAM_FAST_SCAN -ge 5 ] && [ $STX_ROAM_FULL_SCAN -ge 10 ]; then
+        if [ $STX_RSSI -le -75 ] && [ $STX_ROAM_FAST_SCAN -ge 5 ] && [ $STX_ROAM_FULL_SCAN -ge 10 ]; then
             STX_ROAM_FAST_SCAN=0
-        elif [ $rssi -le -65 ] && [ $STX_ROAM_FAST_SCAN -ge 10 ]; then
+        elif [ $STX_RSSI -le -65 ] && [ $STX_ROAM_FAST_SCAN -ge 10 ]; then
             STX_ROAM_FAST_SCAN=0
         fi
         if [ $STX_ROAM_FAST_SCAN -eq 0 ]; then
-            logger "STX ($STX_IF) info: start roam fast scan (rssi: $rssi dBm)"
+            logger "STX ($STX_IF) info: start roam fast scan (RSSI: $STX_RSSI dBm)"
             if [ -n "$SSIDStx" ]; then
                 wpa_cli -p $STX_CTRL scan $SSIDStx > /dev/null 2>&1
             else
@@ -2276,11 +2532,6 @@ check_stx()
             fi
             return
         fi
-    fi
-    stx_phy=$(cat /sys/class/net/$STX_IF/operstate) > /dev/null 2>&1
-    if [ "$stx_phy" = "down" ]; then
-        ifconfig $STX_IF up
-        return
     fi
     if [ "$BRI_OP" != "0" ]; then
         stx_ip=$(ip addr show $STX_IF | grep 'inet ' | head -n1 | awk '{print $2}')
@@ -2365,6 +2616,10 @@ check_stx()
         STX_DHCP_STARTED=0
         STX_WAN_GW="$stx_gw"
         logger "WAN ($STX_WAN_IF) info: $STX_WAN_IP (gateway: $STX_WAN_GW)"
+        pid=$(pgrep -f webalive)
+        if [ -n "$pid" ]; then
+            kill $pid
+        fi
         STX_PING_PUBLIC=1
         STX_PING_COUNT=3
         STX_WAN_COUNT=15
@@ -2391,6 +2646,13 @@ check_stx()
     if [ ! -e "$WAN_INFO" ]; then
         dump_wan_stx
     fi
+    if [ "$STX_ALIVE" = "1" ]; then
+        pid=$(pgrep -f webalive)
+        if [ -z "$pid" ]; then
+            webalive -s $STX_ALIVE_IP -m $STX_MAC &
+        fi
+        return
+    fi
     if [ $STX_WAN_COUNT -gt 0 ]; then
         STX_WAN_COUNT=$(($STX_WAN_COUNT - 1))
         return
@@ -2407,12 +2669,19 @@ check_stx()
 
 link_stx()
 {
-    pid=$(ps -e | grep wpa_supplicant | awk '{print $1}')
-    if [ -n "$pid" ]; then
+    pid=$(ps -ef | grep $STX_CONF | awk '{print $2}')
+    fid=$(cat $STX_PID)
+    for pi in $pid; do
+        if [ "$pi" = "$fid" ]; then
+            break
+        fi
+    done
+    if [ "$pi" = "$fid" ]; then
         bssid=$($IWUTILS dev $STX_IF link | grep Connected | awk '{print $3}') > /dev/null 2>&1
         if [ -n "$bssid" ]; then
             bssid_stx "$bssid"
             dump_stx
+            STX_LOST_BSSID=0
             STX_STATE="COMPLETED"
             return
         fi
@@ -2428,12 +2697,12 @@ link_stx()
 start_stx()
 {
     ifconfig $STX_IF 0.0.0.0 up
-    if [ "$STX_DBG" = "1" ]; then
-        $WPASUPP -i $STX_IF -B -D "nl80211" -P $STX_PID -t -f $STX_LOG -c $STX_CONF > /dev/null 2>&1
+    if [ "$STX_DBG" = "3" ]; then
+        $WPASUPP -i $STX_IF -B -D "nl80211" -P $STX_PID -t -f $STX_LOG -d -K -c $STX_CONF > /dev/null 2>&1
     elif [ "$STX_DBG" = "2" ]; then
         $WPASUPP -i $STX_IF -B -D "nl80211" -P $STX_PID -t -f $STX_LOG -d -c $STX_CONF > /dev/null 2>&1
-    elif [ "$STX_DBG" = "3" ]; then
-        $WPASUPP -i $STX_IF -B -D "nl80211" -P $STX_PID -t -f $STX_LOG -d -K -c $STX_CONF > /dev/null 2>&1
+    elif [ "$STX_DBG" = "1" ]; then
+        $WPASUPP -i $STX_IF -B -D "nl80211" -P $STX_PID -t -f $STX_LOG -c $STX_CONF > /dev/null 2>&1
     else
         $WPASUPP -i $STX_IF -B -D "nl80211" -P $STX_PID -t -s -c $STX_CONF > /dev/null 2>&1
     fi
@@ -2441,11 +2710,12 @@ start_stx()
     STX_SSID=""
     STX_STATE="STARTED"
     STX_LINK_COUNT=30
+    dump_stx
 }
 
 stop_stx()
 {
-    kill_all "$WPASUPP"
+    kill_one "$STX_PID"
     if [ -e $STX_CTRL ]; then
         rm -rf $STX_CTRL
     fi
@@ -2464,16 +2734,23 @@ stop_stx()
 init_stx()
 {
     if [ -z "$STX_IF" ]; then
+        STX_MAC=$MAC_USB
+        STX_IF=$WIFI_USB
+        stop_stx
         return
     fi
-    STX_MAC=$(ip addr show dev $STX_IF | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
+    STX_MAC=""
+    stxif=$(ifconfig -a | grep $STX_IF | awk '{print $1}')
+    if [ -n "$stxif" ]; then
+        STX_MAC=$(ip addr show dev $STX_IF | grep 'link/' | awk '{print $2}')
+    fi
+    stop_stx
     if [ -z "$STX_MAC" ]; then
         logger "Cannot find STX interface $STX_IF"
         STX_OP=0
         STX_IF=""
         return
     fi
-    stop_stx
     if [ "$STX_OP" = "1" ]; then
         ssid_stx
         STX_WAN_IF=$STX_IF
@@ -2678,6 +2955,10 @@ check_enx()
         ENX_DHCP_STARTED=0
         ENX_WAN_GW="$enx_gw"
         logger "WAN ($ENX_IF) info: $ENX_WAN_IP (gateway: $ENX_WAN_GW)"
+        pid=$(pgrep -f webalive)
+        if [ -n "$pid" ]; then
+            kill $pid
+        fi
         ENX_PING_PUBLIC=1
         ENX_PING_COUNT=3
         ENX_WAN_COUNT=15
@@ -2693,6 +2974,13 @@ check_enx()
     fi
     if [ ! -e "$WAN_INFO" ]; then
         dump_wan_enx
+    fi
+    if [ "$ENX_ALIVE" = "1" ]; then
+        pid=$(pgrep -f webalive)
+        if [ -z "$pid" ]; then
+            webalive -s $ENX_ALIVE_IP -m $ENX_MAC &
+        fi
+        return
     fi
     if [ $ENX_WAN_COUNT -gt 0 ]; then
         ENX_WAN_COUNT=$(($ENX_WAN_COUNT - 1))
@@ -2711,8 +2999,8 @@ check_enx()
 
 link_enx()
 {
-    enx_if=$(ifconfig -a | grep $ENX_IF | awk '{print $1}')
-    if [ -z "$enx_if" ]; then
+    enxif=$(ifconfig -a | grep $ENX_IF | awk '{print $1}')
+    if [ -z "$enxif" ]; then
         if [ "$ENX_STATE" = "ATTACHED" ]; then
             ENX_PHY_UP=0
             ENX_STATE="DETACHED"
@@ -2784,8 +3072,8 @@ init_enx()
         return
     fi
     ENX_MAC=""
-    enx_if=$(ifconfig -a | grep $ENX_IF | awk '{print $1}')
-    if [ -n "$enx_if" ]; then
+    enxif=$(ifconfig -a | grep $ENX_IF | awk '{print $1}')
+    if [ -n "$enxif" ]; then
         ENX_MAC=$(ip addr show dev $ENX_IF | grep 'link/' | awk '{print $2}')
         stop_enx
         if [ "$ENX_OP" != "0" ]; then
@@ -2994,6 +3282,10 @@ check_usb()
         USB_DHCP_STARTED=0
         USB_WAN_GW="$usb_gw"
         logger "WAN ($USB_IF) info: $USB_WAN_IP (gateway: $USB_WAN_GW)"
+        pid=$(pgrep -f webalive)
+        if [ -n "$pid" ]; then
+            kill $pid
+        fi
         USB_PING_PUBLIC=1
         USB_PING_COUNT=3
         USB_WAN_COUNT=15
@@ -3002,6 +3294,13 @@ check_usb()
     fi
     if [ ! -e "$WAN_INFO" ]; then
         dump_wan_usb
+    fi
+    if [ "$USB_ALIVE" = "1" ]; then
+        pid=$(pgrep -f webalive)
+        if [ -z "$pid" ]; then
+            webalive -s $USB_ALIVE_IP -m $USB_MAC &
+        fi
+        return
     fi
     if [ $USB_WAN_COUNT -gt 0 ]; then
         USB_WAN_COUNT=$(($USB_WAN_COUNT - 1))
@@ -3020,8 +3319,8 @@ check_usb()
 
 link_usb()
 {
-    usb_if=$(ifconfig -a | grep $USB_IF | awk '{print $1}')
-    if [ -z "$usb_if" ]; then
+    usbif=$(ifconfig -a | grep $USB_IF | awk '{print $1}')
+    if [ -z "$usbif" ]; then
         if [ "$USB_STATE" = "ATTACHED" ]; then
             USB_PHY_UP=0
             USB_STATE="DETACHED"
@@ -3093,8 +3392,8 @@ init_usb()
         return
     fi
     USB_MAC=""
-    usb_if=$(ifconfig -a | grep $USB_IF | awk '{print $1}')
-    if [ -n "$usb_if" ]; then
+    usbif=$(ifconfig -a | grep $USB_IF | awk '{print $1}')
+    if [ -n "$usbif" ]; then
         USB_MAC=$(ip addr show dev $USB_IF | grep 'link/' | awk '{print $2}')
         stop_usb
         if [ "$USB_OP" != "0" ]; then
@@ -3561,6 +3860,10 @@ check_eth()
         ETH_DHCP_STARTED=0
         ETH_WAN_GW="$eth_gw"
         logger "WAN ($ETH_WAN_IF) info: $ETH_WAN_IP (gateway: $ETH_WAN_GW)"
+        pid=$(pgrep -f webalive)
+        if [ -n "$pid" ]; then
+            kill $pid
+        fi
         ETH_PING_PUBLIC=1
         ETH_PING_COUNT=3
         ETH_WAN_COUNT=15
@@ -3597,6 +3900,20 @@ check_eth()
     fi
     if [ ! -e "$WAN_INFO" ]; then
         dump_wan_eth
+    fi
+    if [ "$BRI_OP" = "1" ] && [ "$BRI_ALIVE" = "1" ]; then
+        pid=$(pgrep -f webalive)
+        if [ -z "$pid" ]; then
+            webalive -s $BRI_ALIVE_IP -m $BRI_MAC &
+        fi
+        return
+    fi
+    if [ "$ETH_ALIVE" = "1" ]; then
+        pid=$(pgrep -f webalive)
+        if [ -z "$pid" ]; then
+            webalive -s $ETH_ALIVE_IP -m $ETH_MAC &
+        fi
+        return
     fi
     if [ $ETH_WAN_COUNT -gt 0 ]; then
         ETH_WAN_COUNT=$(($ETH_WAN_COUNT - 1))
@@ -3726,7 +4043,11 @@ init_eth()
     if [ -z "$ETH_IF" ]; then
         return
     fi
-    ETH_MAC=$(ip addr show dev $ETH_IF | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
+    ETH_MAC=""
+    ethif=$(ifconfig -a | grep $ETH_IF | awk '{print $1}')
+    if [ -n "$ethif" ]; then
+        ETH_MAC=$(ip addr show dev $ETH_IF | grep 'link/' | awk '{print $2}')
+    fi
     if [ -z "$ETH_MAC" ]; then
         logger "Cannot find ETH interface $ETH_IF"
         exit 0
@@ -3779,8 +4100,8 @@ add_sta_bri()
 del_enx_bri()
 {
     if [ -n "$BRI_MAC" ] && [ -n "$ENX_IF" ]; then
-        enx_if=$(brctl show $BRI_IF | grep $ENX_IF) > /dev/null 2>&1
-        if [ -n "$enx_if" ]; then
+        enxif=$(brctl show $BRI_IF | grep $ENX_IF) > /dev/null 2>&1
+        if [ -n "$enxif" ]; then
             brctl delif $BRI_IF $ENX_IF
             logger "WAN ($ENX_IF) info: interface removed from $BRI_IF"
         fi
@@ -3902,25 +4223,19 @@ init_iface()
     init_son
 }
 
-init_wifi()
+init_monitor()
 {
-    if [ -n "$WIFI_PCI" ] && [ "$WLN_IF" = "$WIFI_PCI" -o "$STA_IF" = "$WIFI_PCI" ]; then
-        MAC_PCI=$(ip addr show dev $WIFI_PCI | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
-        if [ -z "$MAC_PCI" ]; then
-            logger "Cannot find Wi-Fi interface $WIFI_PCI"
-            return
-        fi
-        ifconfig $WIFI_PCI up
-        sleep 1
+    if [ "$MON_PCI_OP" = "1" ]; then
+        $IWUTILS dev $WIFI_PCI set type monitor
+        ifconfig $WIFI_PCI 0.0.0.0 up
+        $IWUTILS dev $WIFI_PCI set channel $MON_PCI_CHAN HT20
+        logger "MON ($WIFI_PCI) info: Wi-Fi PCI monitor channel $MON_PCI_CHAN"
     fi
-    if [ -n "$WIFI_USB" ] && [ "$WLX_IF" = "$WIFI_USB" -o "$STX_IF" = "$WIFI_USB" ]; then
-        MAC_USB=$(ip addr show dev $WIFI_USB | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
-        if [ -z "$MAC_USB" ]; then
-            logger "Cannot find Wi-Fi USB interface $WIFI_USB"
-            return
-        fi
-        ifconfig $WIFI_USB up
-        sleep 1
+    if [ "$MON_USB_OP" = "1" ]; then
+        ifconfig $WIFI_USB 0.0.0.0 up
+        iwconfig $WIFI_USB mode monitor
+        iwconfig $WIFI_USB channel $MON_USB_CHAN
+        logger "MON ($WIFI_USB) info: Wi-Fi USB monitor channel $MON_USB_CHAN"
     fi
 }
 
@@ -3934,7 +4249,7 @@ init_drv()
     if [ -n "$param" ]; then
         echo 1 > /sys/module/cfg80211/parameters/bss_scan_filtering
     fi
-    if [ -n "$WIFI_PCI" ] && [ "$WLN_IF" = "$WIFI_PCI" -o "$STA_IF" = "$WIFI_PCI" ]; then
+    if [ -n "$WIFI_PCI" ]; then
         if [ -n "$ATH_MOD" ]; then
             logger "Probing Wi-Fi module $ATH_MOD"
             modprobe $ATH_MOD > /dev/null 2>&1
@@ -3965,13 +4280,31 @@ init_drv()
             fi
             sleep 1
         fi
+        MAC_PCI=""
+        wifipci=$(ifconfig -a | grep $WIFI_PCI | awk '{print $1}')
+        if [ -n "$wifipci" ]; then
+            MAC_PCI=$(ip addr show dev $WIFI_PCI | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
+        fi
+        if [ -z "$MAC_PCI" ]; then
+            logger "Cannot find Wi-Fi interface $WIFI_PCI"
+            return
+        fi
     fi
-    if [ -n "$WIFI_USB" ] && [ "$WLX_IF" = "$WIFI_USB" -o "$STX_IF" = "$WIFI_USB" ]; then
+    if [ -n "$WIFI_USB" ]; then
         if [ -n "$RTL_MOD" ]; then
             logger "Probing Wi-Fi USB module $RTL_MOD"
             modprobe $RTL_MOD > /dev/null 2>&1
         fi
         sleep 1
+        MAC_USB=""
+        wifiusb=$(ifconfig -a | grep $WIFI_USB | awk '{print $1}')
+        if [ -n "$wifiusb" ]; then
+            MAC_USB=$(ip addr show dev $WIFI_USB | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
+        fi
+        if [ -z "$MAC_USB" ]; then
+            logger "Cannot find Wi-Fi interface $WIFI_USB"
+            return
+        fi
     fi
     rfkill unblock wifi
     sleep 5
@@ -3989,9 +4322,16 @@ clean_wifi()
         kill_all "hostapd"
         kill_all "wpa_supplicant"
     fi
+    pid=$(pgrep -f webalive)
+    if [ -n "$pid" ]; then
+        kill $pid
+    fi
     kill_all $WPASUPP
     if [ -n "$HOSTAPD" ]; then
         kill_all $HOSTAPD
+    fi
+    if [ -n "$BTTNODE" ]; then
+        kill_all $BTTNODE
     fi
     if [ -n "$DHCPSRV" ]; then
         kill_all "$DHCPSRV"
@@ -4008,11 +4348,23 @@ clean_wifi()
     if [ -e "/var/log/wpa_supplicant-$WIFI_PCI.log" ]; then
         rm /var/log/wpa_supplicant-$WIFI_PCI.log
     fi
+    if [ -e "/var/run/hostapd-$WIFI_PCI.pid" ]; then
+        rm /var/run/hostapd-$WIFI_PCI.pid
+    fi
+    if [ -e "/var/run/wpa_supplicant-$WIFI_PCI.pid" ]; then
+        rm /var/run/wpa_supplicant-$WIFI_PCI.pid
+    fi
     if [ -e "/var/log/hostapd-$WIFI_USB.log" ]; then
         rm /var/log/hostapd-$WIFI_USB.log
     fi
     if [ -e "/var/log/wpa_supplicant-$WIFI_USB.log" ]; then
         rm /var/log/wpa_supplicant-$WIFI_USB.log
+    fi
+    if [ -e "/var/run/hostapd-$WIFI_USB.pid" ]; then
+        rm /var/run/hostapd-$WIFI_USB.pid
+    fi
+    if [ -e "/var/run/wpa_supplicant-$WIFI_USB.pid" ]; then
+        rm /var/run/wpa_supplicant-$WIFI_USB.pid
     fi
     while [ 1 ]; do
         enx=$(ifconfig | grep enx | head -n1 | awk '{print $1}' | cut -d ':' -f1) > /dev/null 2>&1
@@ -4035,6 +4387,9 @@ clean_info()
     if [ -e "$WAN_INFO" ]; then
         rm -f $WAN_INFO
     fi
+    if [ -e "$LAN_INFO" ]; then
+        rm -f $LAN_INFO
+    fi
     if [ -e "$STA_INFO" ]; then
         rm -f $STA_INFO
     fi
@@ -4050,8 +4405,11 @@ clean_info()
     if [ -e "$WLX_INFO" ]; then
         rm -f $WLX_INFO
     fi
-    if [ -e "$LAN_INFO" ]; then
-        rm -f $LAN_INFO
+    if [ -e "$PHY_INFO" ]; then
+        rm -f $PHY_INFO
+    fi
+    if [ -e "$BTT_INFO" ]; then
+        rm -f $BTT_INFO
     fi
     if [ -d "$OPT_DIR" ]; then
         rm -fr $OPT_DIR
@@ -4287,17 +4645,30 @@ set_opmode()
             logger "UWIN info: WLX Mode --> Server"
         fi
     fi
-    if [ -n "$MON_IF" ] && [ -n "$WIFI_PCI" ]; then
-        if [ -n "$MON_CHAN" ] && [ "$MON_CHAN" != "0" ]; then
-            MON_OP=1
-            logger "UWIN info: MON Mode --> Active"
-        fi
-    fi
     if [ "$SON_OP" = "1" ]; then
         if [ "$STA_OP" = "1" -a "$WLX_OP" = "1" ] || [ "$WLN_OP" = "1" -a "$STX_OP" = "1" ]; then
-            logger "UWIN info: LAN will be Self Organizing Network (SON)"
+            logger "UWIN info: SON auto L3 networking enabled"
         else
             logger "UWIN info: Cannot run SON without dual-channel Wi-Fi connections"
+            exit 0
+        fi
+    fi
+    if [ "$BTT_COUNT" = "2" -o "$BTT_COUNT" = "4" -o "$BTT_COUNT" = "8" -o "$BTT_COUNT" = "16" -o "$BTT_COUNT" = "32" ]; then
+        if [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "1" -o "$WLN_OP" = "1" ]; then
+            BTT_OP=1
+            logger "UWIN info: BTT node ($BTT_COUNT,0) L2 chaining enabled"
+        else
+            if [ "$BTT_LOCAL" != "0" ] && [ $BTT_LOCAL -le $BTT_COUNT ]; then
+                if [ "$STA_OP" = "1" -a "$WLX_OP" = "1" ] || [ "$WLN_OP" = "1" -a "$STX_OP" = "1" ]; then
+                    BTT_OP=1
+                    logger "UWIN info: BTT node ($BTT_COUNT,$BTT_LOCAL) L2 chaining enabled"
+                fi
+            fi
+        fi
+        if [ "$BTT_OP" = "1" ]; then
+            BTT_CHAN_BAND="20"
+        else
+            logger "UWIN info: Cannot run BTT node ($BTT_COUNT,$BTT_LOCAL) L2 chaining"
             exit 0
         fi
     fi
@@ -4307,9 +4678,21 @@ set_opmode()
     if [ "$PCI_WDS" = "1" ]; then
         logger "UWIN info: Wi-Fi WDS enabled"
     fi
+    if [ -n "$MON_IF" ] && [ -n "$WIFI_PCI" ] && [ -n "$STA_IF" -o -n "$WLN_IF" ]; then
+        MON_OP=1
+        logger "UWIN info: Wi-Fi monitor interface enabled"
+    fi
+    if [ "$MON_PCI" = "1" ] && [ -n "$WIFI_PCI" ] && [ -z "$STA_IF" -a -z "$WLN_IF" ]; then
+        MON_PCI_OP=1
+        logger "UWIN info: Wi-Fi PCI monitor enabled"
+    fi
+    if [ "$MON_USB" = "1" ] && [ -n "$WIFI_USB" ] && [ -z "$STX_IF" -a -z "$WLX_IF" ]; then
+        MON_USB_OP=1
+        logger "UWIN info: Wi-Fi USB monitor enabled"
+    fi
 }
 
-init_param()
+clear_vars()
 {
     BRI_OP=0
     ETH_OP=0
@@ -4324,12 +4707,21 @@ init_param()
     MON_OP=0
     LAN_OP=0
     SON_OP=0
+    BTT_OP=0
     ETH_BR=0
     USB_BR=0
     ENX_BR=0
     PCI_WDS=0
+    SAP_WDS=0
+    SAP_WAN=0
+    WLN_WDS=0
+    WLN_WAN=0
+    VAP_WAN=0
     STX_WDS=0
     WLX_WDS=0
+    WLX_WAN=0
+    MON_PCI_OP=0
+    MON_USB_OP=0
     BRI_CONFIG=0
     ETH_CONFIG=0
     USB_CONFIG=0
@@ -4373,41 +4765,79 @@ clear_conf()
 #***********#
 # Main Loop #
 #***********#
-logger "$0 checking..."
+logger "\"$0\" checking..."
 kill_all $0
 
 clear_conf
+clear_vars
 if [ ! -e "/etc/uwin.conf" ]; then
     logger "Cannot find configuration file /etc/uwin.conf"
     exit 0
 fi
 source "/etc/uwin.conf"
-init_param
 set_opmode
 
 if [ "$STA_OP" = "1" ] && [ ! -e "$STA_CONF" ]; then
     logger "Cannot find configuration file $STA_CONF"
     exit 0
 fi
-if [ "$SAP_OP" = "1" ] && [ ! -e "$SAP_CONF11" -o ! -e "$SAP_CONF12" -o ! -e "$SAP_CONF21" -o ! -e "$SAP_CONF22" ]; then
-    logger "Cannot find configuration files for $SAP_IF"
-    exit 0
+if [ "$SAP_OP" = "1" ]; then
+    if [ "$SAP_WDS" = "1" ] && [ "$SAP_WAN" = "1" ] && [ ! -e "$SAP_CONF22" ]; then
+        logger "Cannot find configuration file $SAP_CONF22"
+        exit 0
+    elif [ "$SAP_WDS" = "1" ] && [ ! -e "$SAP_CONF21" ]; then
+        logger "Cannot find configuration file $SAP_CONF21"
+        exit 0
+    elif [ "$SAP_WDS" = "0" ] && [ "$SAP_WAN" = "1" ] && [ ! -e "$SAP_CONF12" ]; then
+        logger "Cannot find configuration file $SAP_CONF12"
+        exit 0
+    elif [ ! -e "$SAP_CONF11" ]; then
+        logger "Cannot find configuration file $SAP_CONF11"
+        exit 0
+    fi
 fi
-if [ "$WLN_OP" = "1" ] && [ ! -e "$WLN_CONF11" -o ! -e "$WLN_CONF12" -o ! -e "$WLN_CONF21" -o ! -e "$WLN_CONF22" ]; then
-    logger "Cannot find configuration files for $WLN_IF"
-    exit 0
+if [ "$WLN_OP" = "1" ]; then
+    if [ "$WLN_WDS" = "1" ] && [ "$WLN_WAN" = "1" ] && [ ! -e "$WLN_CONF22" ]; then
+        logger "Cannot find configuration file $WLN_CONF22"
+        exit 0
+    elif [ "$WLN_WDS" = "1" ] && [ ! -e "$WLN_CONF21" ]; then
+        logger "Cannot find configuration file $WLN_CONF21"
+        exit 0
+    elif [ "$WLN_WDS" = "0" ] && [ "$WLN_WAN" = "1" ] && [ ! -e "$WLN_CONF12" ]; then
+        logger "Cannot find configuration file $WLN_CONF12"
+        exit 0
+    elif [ ! -e "$WLN_CONF11" ]; then
+        logger "Cannot find configuration file $WLN_CONF11"
+        exit 0
+    fi
 fi
-if [ "$VAP_OP" = "1" ] && [ ! -e "$VAP_CONF11" -o ! -e "$VAP_CONF12" -o ! -e "$VAP_CONF21" -o ! -e "$VAP_CONF22" ]; then
-    logger "Cannot find configuration files for $VAP_IF"
-    exit 0
+if [ "$VAP_OP" = "1" ]; then
+    if [ "$WLN_WAN" = "1" ] && [ "$VAP_WAN" = "1" ] && [ ! -e "$VAP_CONF22" ]; then
+        logger "Cannot find configuration file $VAP_CONF22"
+        exit 0
+    elif [ "$WLN_WAN" = "1" ] && [ ! -e "$VAP_CONF21" ]; then
+        logger "Cannot find configuration file $VAP_CONF21"
+        exit 0
+    elif [ "$WLN_WAN" = "0" ] && [ "$VAP_WAN" = "1" ] && [ ! -e "$VAP_CONF12" ]; then
+        logger "Cannot find configuration file $VAP_CONF12"
+        exit 0
+    elif [ ! -e "$VAP_CONF11" ]; then
+        logger "Cannot find configuration file $VAP_CONF11"
+        exit 0
+    fi
 fi
 if [ "$STX_OP" = "1" ] && [ ! -e "$STX_CONF" ]; then
     logger "Cannot find configuration file $STX_CONF"
     exit 0
 fi
-if [ "$WLX_OP" = "1" ] && [ ! -e "$WLX_CONF1" -o ! -e "$WLX_CONF2" ]; then
-    logger "Cannot find configuration files for $WLX_IF"
-    exit 0
+if [ "$WLX_OP" = "1" ]; then
+    if [ "$WLX_WAN" = "1" ] && [ ! -e "$WLX_CONF2" ]; then
+        logger "Cannot find configuration file $WLX_CONF2"
+        exit 0
+    elif [ ! -e "$WLX_CONF1" ]; then
+        logger "Cannot find configuration file $WLX_CONF1"
+        exit 0
+    fi
 fi
 if [ -n "$WIRE_ETH" ]; then
     WIRE_MAC=$(ip addr show dev $WIRE_ETH | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
@@ -4424,8 +4854,8 @@ clean_info
 clean_wifi
 
 init_drv
-init_wifi
 init_iface
+init_monitor
 
 set_ip_tables
 set_ip_forward

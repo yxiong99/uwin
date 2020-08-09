@@ -2,8 +2,7 @@
 #
 logger "Start UWIN network manager..."
 
-#start-stop-daemon -S -b -x /usr/sbin/netmgr
-sudo bash netmgr.sh &
+./netmgr.sh &
 
 exit 0
 

@@ -73,6 +73,7 @@ down_wifi()
         if [ -n "$MON_IF" ]; then
             iface=$(ifconfig -a | grep $MON_IF | awk '{print $1}') > /dev/null 2>&1
             if [ -n "$iface" ]; then
+                ifconfig $MON_IF down
                 iw dev $MON_IF del
             fi
         fi
@@ -136,6 +137,11 @@ stop_ps()
             kill -9 $i > /dev/null 2>&1
         fi
     done
+    pid=$(pgrep -f webalive)
+    if [ -n "$pid" ]; then
+        kill $pid > /dev/null 2>&1
+    fi
+    killall $BTTNODE > /dev/null 2>&1
     killall $WPASUPP > /dev/null 2>&1
     killall $HOSTAPD > /dev/null 2>&1
     killall $DHCPCLI > /dev/null 2>&1
