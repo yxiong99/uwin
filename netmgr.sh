@@ -1563,7 +1563,7 @@ check_sta()
         logger "STA ($STA_IF) info: RSSI $STA_RSSI_SHOW dBm"
     fi
     if [ "$rssi" != "$STA_RSSI" ]; then
-        if [ $rssi -gt $(($STA_RSSI + 2)) ] || [ $rssi -lt $(($STA_RSSI - 2)) ]; then
+        if [ $rssi -gt $(($STA_RSSI + 1)) ] || [ $rssi -lt $(($STA_RSSI - 1)) ]; then
             BTT_PHY_UPDATE=1
         fi
         STA_RSSI=$rssi
@@ -1574,8 +1574,9 @@ check_sta()
             BTT_PHY_UPDATE=1
             STA_RATE=$rate
         fi
-        if [ "$BTT_PHY_UPDATE" = "1" ] && [ "$STA_RATE" != "1.0" ]; then
+        if [ "$BTT_PHY_UPDATE" = "1" ]; then
             dump_btt_phy $STA_RSSI $STA_RATE $WLX_CHAN $BTT_CHAN_BAND
+            return
         fi
         pid=$(pgrep -f $BTTNODE)
         if [ -z "$pid" ]; then
@@ -2488,7 +2489,7 @@ check_stx()
         logger "STX ($STX_IF) info: RSSI $STX_RSSI_SHOW dBm"
     fi
     if [ "$rssi" != "$STX_RSSI" ]; then
-        if [ $rssi -gt $(($STX_RSSI + 2)) ] || [ $rssi -lt $(($STX_RSSI - 2)) ]; then
+        if [ $rssi -gt $(($STX_RSSI + 1)) ] || [ $rssi -lt $(($STX_RSSI - 1)) ]; then
             BTT_PHY_UPDATE=1
         fi
         STX_RSSI=$rssi
@@ -2499,8 +2500,9 @@ check_stx()
             BTT_PHY_UPDATE=1
             STX_RATE=$rate
         fi
-        if [ "$BTT_PHY_UPDATE" = "1" ] && [ "$STX_RATE" != "1.0" ]; then
+        if [ "$BTT_PHY_UPDATE" = "1" ]; then
             dump_btt_phy $STX_RSSI $STX_RATE $WLN_CHAN $BTT_CHAN_BAND
+            return
         fi
         pid=$(pgrep -f $BTTNODE)
         if [ -z "$pid" ]; then
