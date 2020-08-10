@@ -1569,7 +1569,7 @@ check_sta()
         STA_RSSI=$rssi
     fi
     if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
-        rate=$($IWUTILS dev $STA_IF link | grep 'bitrate:' | awk '{print $3}') > /dev/null 2>&1
+        rate=$($IWUTILS dev $STA_IF link | grep 'tx bitrate:' | awk '{print $3}') > /dev/null 2>&1
         if [ "$rate" != "$STA_RATE" ]; then
             BTT_PHY_UPDATE=1
             STA_RATE=$rate
@@ -2494,7 +2494,7 @@ check_stx()
         STX_RSSI=$rssi
     fi
     if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ "$STA_OP" = "0" ]; then
-        rate=$($IWUTILS dev $STX_IF link | grep 'bitrate:' | awk '{print $3}') > /dev/null 2>&1
+        rate=$($IWUTILS dev $STX_IF link | grep 'tx bitrate:' | awk '{print $3}') > /dev/null 2>&1
         if [ "$rate" != "$STX_RATE" ]; then
             BTT_PHY_UPDATE=1
             STX_RATE=$rate
