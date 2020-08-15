@@ -63,8 +63,8 @@ down_wifi()
             sleep 1
             if [ -n "$RTL_MOD" ]; then
                 rtl=$(lsmod | grep $RTL_MOD | head -n1 | awk '{print $1}')
-                if [ -n "$rtl" ]; then
-                    rmmod $RTL_MOD > /dev/null 2>&1
+                if [ -z "$rtl" ]; then
+                    modprobe $RTL_MOD > /dev/null 2>&1
                 fi
             fi
         fi
