@@ -5117,10 +5117,11 @@ clear_conf()
 # Main Loop #
 #***********#
 logger "\"$0\" checking..."
-kill_all $0
 
+kill_all $0
 clear_conf
 clear_vars
+
 if [ ! -e "/etc/uwin.conf" ]; then
     logger "Cannot find configuration file /etc/uwin.conf"
     exit 0
