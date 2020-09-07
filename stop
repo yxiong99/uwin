@@ -56,15 +56,15 @@ down_br()
 
 down_wifi()
 {
-     if [ -n "$WIFI_USB" ]; then
+    if [ -n "$WIFI_USB" ]; then
         iface=$(ifconfig -a | grep $WIFI_USB | awk '{print $1}') > /dev/null 2>&1
         if [ -n "$iface" ]; then
             ifconfig $WIFI_USB down
             sleep 1
             if [ -n "$RTL_MOD" ]; then
                 rtl=$(lsmod | grep $RTL_MOD | head -n1 | awk '{print $1}')
-                if [ -z "$rtl" ]; then
-                    modprobe $RTL_MOD > /dev/null 2>&1
+                if [ -n "$rtl" ]; then
+                    rmmod $RTL_MOD > /dev/null 2>&1
                 fi
             fi
         fi
@@ -90,24 +90,32 @@ down_wifi()
             sleep 1
             wiphy=$(iw phy | grep 'Wiphy' | awk '{print $2}') > /dev/null 2>&1
             if [ -n "$wiphy" ] && [ -n "$ATH_MOD" -o -n "$IWL_MOD" ]; then
-                wds=0
+                del=0
+                if [ "$MON_PCI" = "1" ]; then
+                    del=1
+                fi
                 if [ -n "$STA_IF" ] && [ "$BRI_PHY" = "2" ]; then
-                    wds=1
+                    del=1
                 fi
                 if [ -n "$WLN_IF" ] && [ "$WLN_WDS" = "1" ]; then
-                    wds=1
+                    del=1
                 fi
                 if [ -n "$SAP_IF" ] && [ "$SAP_WDS" = "1" ]; then
-                    wds=1
+                    del=1
                 fi
-                if [ "$wds" = "1" ]; then
+                if [ "$del" = "1" ]; then
                     iw dev $WIFI_PCI del
-                    logger "Wi-Fi radio device will run 3-address mode"
                     iw phy $wiphy interface add $WIFI_PCI type managed > /dev/null 2>&1
                 fi
             fi
         fi
+        sleep 1
         ifconfig $WIFI_PCI up
+    fi
+    if [ -n "$WIFI_USB" ] && [ -n "$RTL_MOD" ]; then
+        modprobe $RTL_MOD > /dev/null 2>&1
+        sleep 1
+        ifconfig $WIFI_USB up
     fi
 }
 

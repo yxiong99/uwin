@@ -199,263 +199,467 @@ set_ip_tables()
 }
 
 #**********************#
-# SON Bridge Operation #
+# BTT Bridge Operation #
 #**********************#
-del_enx_son()
+del_enx_btt()
 {
-    if [ -n "$SON_MAC" ] && [ -n "$ENX_IF" ]; then
-        brif=$(brctl show $SON_IF | grep $ENX_IF) > /dev/null 2>&1
+    if [ -n "$BTT_MAC" ] && [ -n "$ENX_IF" ]; then
+        brif=$(brctl show $BTT_IF | grep $ENX_IF) > /dev/null 2>&1
         if [ -n "$brif" ]; then
-            brctl delif $SON_IF $ENX_IF
-            logger "LAN ($ENX_IF) info: interface removed from $SON_IF"
+            brctl delif $BTT_IF $ENX_IF
+            logger "LAN ($ENX_IF) info: interface removed from $BTT_IF"
         fi
     fi
 }
 
-add_enx_son()
+add_enx_btt()
 {
-    if [ -n "$SON_WAN_IF" ] && [ -n "$SON_WAN_GW" ]; then
-        brif=$(brctl show $SON_IF | grep $ENX_IF) > /dev/null 2>&1
+    if [ -n "$BTT_WAN_IF" ] && [ -n "$BTT_WAN_GW" ]; then
+        brif=$(brctl show $BTT_IF | grep $ENX_IF) > /dev/null 2>&1
         if [ -z "$brif" ]; then
-            brctl addif $SON_IF $ENX_IF
-            logger "LAN ($ENX_IF) info: interface added to $SON_IF"
+            brctl addif $BTT_IF $ENX_IF
+            logger "LAN ($ENX_IF) info: interface added to $BTT_IF"
         fi
     fi
 }
 
-del_usb_son()
+del_usb_btt()
 {
-    if [ -n "$SON_MAC" ] && [ -n "$USB_IF" ]; then
-        brif=$(brctl show $SON_IF | grep $USB_IF) > /dev/null 2>&1
+    if [ -n "$BTT_MAC" ] && [ -n "$USB_IF" ]; then
+        brif=$(brctl show $BTT_IF | grep $USB_IF) > /dev/null 2>&1
         if [ -n "$brif" ]; then
-            brctl delif $SON_IF $USB_IF
-            logger "LAN ($USB_IF) info: interface removed from $SON_IF"
+            brctl delif $BTT_IF $USB_IF
+            logger "LAN ($USB_IF) info: interface removed from $BTT_IF"
         fi
     fi
 }
 
-add_usb_son()
+add_usb_btt()
 {
-    if [ -n "$SON_WAN_IF" ] && [ -n "$SON_WAN_GW" ]; then
-        brif=$(brctl show $SON_IF | grep $USB_IF) > /dev/null 2>&1
+    if [ -n "$BTT_WAN_IF" ] && [ -n "$BTT_WAN_GW" ]; then
+        brif=$(brctl show $BTT_IF | grep $USB_IF) > /dev/null 2>&1
         if [ -z "$brif" ]; then
-            brctl addif $SON_IF $USB_IF
-            logger "LAN ($USB_IF) info: interface added to $SON_IF"
+            brctl addif $BTT_IF $USB_IF
+            logger "LAN ($USB_IF) info: interface added to $BTT_IF"
         fi
     fi
 }
 
-del_eth_son()
+del_eth_btt()
 {
-    if [ -n "$SON_MAC" ] && [ -n "$ETH_IF" ]; then
-        brif=$(brctl show $SON_IF | grep $ETH_IF) > /dev/null 2>&1
+    if [ -n "$BTT_MAC" ] && [ -n "$ETH_IF" ]; then
+        brif=$(brctl show $BTT_IF | grep $ETH_IF) > /dev/null 2>&1
         if [ -n "$brif" ]; then
-            brctl delif $SON_IF $ETH_IF
-            logger "LAN ($ETH_IF) info: interface removed from $SON_IF"
+            brctl delif $BTT_IF $ETH_IF
+            logger "LAN ($ETH_IF) info: interface removed from $BTT_IF"
         fi
     fi
 }
 
-add_eth_son()
+add_eth_btt()
 {
-    if [ -n "$SON_WAN_IF" ] && [ -n "$SON_WAN_GW" ]; then
-        brif=$(brctl show $SON_IF | grep $ETH_IF) > /dev/null 2>&1
+    if [ -n "$BTT_WAN_IF" ] && [ -n "$BTT_WAN_GW" ]; then
+        brif=$(brctl show $BTT_IF | grep $ETH_IF) > /dev/null 2>&1
         if [ -z "$brif" ]; then
-            brctl addif $SON_IF $ETH_IF
-            logger "LAN ($ETH_IF) info: interface added to $SON_IF"
+            brctl addif $BTT_IF $ETH_IF
+            logger "LAN ($ETH_IF) info: interface added to $BTT_IF"
         fi
     fi    
 }
 
-dump_son()
+dump_lan_btt()
 {
     echo -n > $LAN_INFO
     {
         echo "LAN info:"
-        echo "  LAN_IF=$SON_IF"
-        echo "  LAN_MAC=$SON_MAC"
-        echo "  LAN_IP=$SON_IP"
-        echo "  LAN_START=$SON_START"
-        echo "  LAN_END=$SON_END"
-        echo "  LAN_GW=$SON_GW"
+        echo "  LAN_IF=$BTT_IF"
+        echo "  LAN_MAC=$BTT_MAC"
+        echo "  LAN_IP=$BTT_IP"
+        echo "  LAN_START=$BTT_START"
+        echo "  LAN_END=$BTT_END"
+        echo "  LAN_GW=$BTT_GW"
     } >> $LAN_INFO
 }
 
-conf_son()
+dump_phy_btt()
+{
+    phy1=$1
+    phy2=$2
+    phy3=$3
+    phy4=$4
+    echo -n > $PHY_INFO
+    {
+        echo "PHY info:"
+        if [ -n "$phy3" ]; then
+            echo "  LAN_CHAN=$phy3"
+            echo "  LAN_BAND=$phy4"
+            echo "  WAN_RSSI=$phy1"
+            echo "  WAN_RATE=$phy2"
+        else
+            echo "  LAN_CHAN=$phy1"
+            echo "  LAN_BAND=$phy2"
+        fi
+    } >> $PHY_INFO
+}
+
+conf_btt()
 {
     DNSMASQ_ARGS=${DNSMASQ_ARGS}" $@"
 }
 
-start_son()
+start_btt()
 {
-    ifconfig $SON_IF 0.0.0.0 up
-    old_ip=$(ip addr show $SON_IF | grep 'inet ' | head -n1 | awk '{print $2}')
+    ifconfig $BTT_IF 0.0.0.0 up
+    old_ip=$(ip addr show $BTT_IF | grep 'inet ' | head -n1 | awk '{print $2}')
     if [ -n "$old_ip" ]; then
-        del_addr $SON_IF
-        del_route $SON_IF
+        del_addr $BTT_IF
+        del_route $BTT_IF
     fi
-    ip addr add dev $SON_IF $son_ip broadcast $son_brd
+    ip addr add dev $BTT_IF $btt_ip broadcast $btt_brd
     DNSMASQ_ARGS="-o -f -b -K -D -Q 2007"
-    conf_son "--dhcp-sequential-ip --dhcp-leasefile=$LAN_DHCP_LEASE2"
-    conf_son "--clear-on-reload --dhcp-option=6,8.8.8.8,8.8.4.4"
-    conf_son "-i $SON_IF -F $SON_IF,$son_start,$son_end,3600"
+    conf_btt "--dhcp-sequential-ip --dhcp-leasefile=$BTT_DHCP_LEASE"
+    conf_btt "--clear-on-reload --dhcp-option=6,8.8.8.8,8.8.4.4"
+    conf_btt "-i $BTT_IF -F $BTT_IF,$btt_start,$btt_end,3600"
     $DNSMASQ $DNSMASQ_ARGS
 }
 
-dnsmasq_son()
+dnsmasq_btt()
 {
     kill_all "$DNSMASQ"
-    son_ip=$SON_IP
-    son_brd=$SON_BRD
-    son_gw=$SON_GW
-    son_start=$SON_START
-    son_end=$SON_END
-    start_son
-    logger "LAN ($SON_IF) info: $SON_IP (gateway: $SON_GW)"
-    dump_son
+    btt_ip=$BTT_IP
+    btt_brd=$BTT_BRD
+    btt_gw=$BTT_GW
+    btt_start=$BTT_START
+    btt_end=$BTT_END
+    start_btt
+    logger "LAN ($BTT_IF) info: $BTT_IP (gateway: $BTT_GW)"
+    dump_lan_btt
 }
 
-update_son()
+config_16_btt()
 {
-    gw1=$(echo $SON_WAN_GW | cut -d '.' -f1)
-    gw2=$(echo $SON_WAN_GW | cut -d '.' -f2)
-    gw3=$(echo $SON_WAN_GW | cut -d '.' -f3)
-    gw4=$(echo $SON_WAN_GW | cut -d '.' -f4)
-    if [ "$gw4" = "1" ]; then
-        ping_test="$gw1.$gw2.$gw3.129"
-        ping -I $SON_WAN_IF "$ping_test" -c 1 -W 5 -s 20 > /dev/null 2>&1
-        if [ "$?" != "0" ]; then
-            SON_IP="$gw1.$gw2.$gw3.129/25"
-            SON_BRD="$gw1.$gw2.$gw3.255"
-            SON_GW="$gw1.$gw2.$gw3.129"
-            SON_START="$gw1.$gw2.$gw3.131"
-            SON_END="$gw1.$gw2.$gw3.158"
-            dnsmasq_son
-        else
-            ping_test="$gw1.$gw2.$gw3.65"
-            ping -I $SON_WAN_IF "$ping_test" -c 1 -W 5 -s 20 > /dev/null 2>&1
-            if [ "$?" != "0" ]; then
-                SON_IP="$gw1.$gw2.$gw3.65/26"
-                SON_BRD="$gw1.$gw2.$gw3.127"
-                SON_GW="$gw1.$gw2.$gw3.65"
-                SON_START="$gw1.$gw2.$gw3.67"
-                SON_END="$gw1.$gw2.$gw3.94"
-                dnsmasq_son
-            else
-                ping_test="$gw1.$gw2.$gw3.33"
-                ping -I $SON_WAN_IF "$ping_test" -c 1 -W 5 -s 20 > /dev/null 2>&1
-                if [ "$?" != "0" ]; then
-                    SON_IP="$gw1.$gw2.$gw3.33/27"
-                    SON_BRD="$gw1.$gw2.$gw3.63"
-                    SON_GW="$gw1.$gw2.$gw3.33"
-                    SON_START="$gw1.$gw2.$gw3.35"
-                    SON_END="$gw1.$gw2.$gw3.62"
-                    dnsmasq_son
-                fi
-            fi
+    n1=$(echo $BTT_NET | cut -d '.' -f1)
+    n2=$(echo $BTT_NET | cut -d '.' -f2)
+    n3=$(echo $BTT_NET | cut -d '.' -f3)
+    case $btt_node in
+    15)
+        BTT_IP="$n1.$n2.$n3.241/28"
+        BTT_GW="$n1.$n2.$n3.241"
+        BTT_BRD="$n1.$n2.$n3.255"
+        BTT_START="$n1.$n2.$n3.242"
+        BTT_END="$n1.$n2.$n3.254"
+        ;;
+    14)
+        BTT_IP="$n1.$n2.$n3.225/27"
+        BTT_GW="$n1.$n2.$n3.225"
+        BTT_BRD="$n1.$n2.$n3.239"
+        BTT_START="$n1.$n2.$n3.226"
+        BTT_END="$n1.$n2.$n3.238"
+        ;;
+    13)
+        BTT_IP="$n1.$n2.$n3.209/28"
+        BTT_GW="$n1.$n2.$n3.209"
+        BTT_BRD="$n1.$n2.$n3.223"
+        BTT_START="$n1.$n2.$n3.210"
+        BTT_END="$n1.$n2.$n3.222"
+        ;;
+    12)
+        BTT_IP="$n1.$n2.$n3.193/26"
+        BTT_GW="$n1.$n2.$n3.193"
+        BTT_BRD="$n1.$n2.$n3.255"
+        BTT_START="$n1.$n2.$n3.194"
+        BTT_END="$n1.$n2.$n3.206"
+        ;;
+    11)
+        BTT_IP="$n1.$n2.$n3.177/28"
+        BTT_GW="$n1.$n2.$n3.177"
+        BTT_BRD="$n1.$n2.$n3.191"
+        BTT_START="$n1.$n2.$n3.178"
+        BTT_END="$n1.$n2.$n3.190"
+        ;;
+    10)
+        BTT_IP="$n1.$n2.$n3.161/27"
+        BTT_GW="$n1.$n2.$n3.161"
+        BTT_BRD="$n1.$n2.$n3.191"
+        BTT_START="$n1.$n2.$n3.162"
+        BTT_END="$n1.$n2.$n3.174"
+        ;;
+    9)
+        BTT_IP="$n1.$n2.$n3.145/28"
+        BTT_GW="$n1.$n2.$n3.145"
+        BTT_BRD="$n1.$n2.$n3.159"
+        BTT_START="$n1.$n2.$n3.146"
+        BTT_END="$n1.$n2.$n3.158"
+        ;;
+    8)
+        BTT_IP="$n1.$n2.$n3.129/25"
+        BTT_GW="$n1.$n2.$n3.129"
+        BTT_BRD="$n1.$n2.$n3.255"
+        BTT_START="$n1.$n2.$n3.130"
+        BTT_END="$n1.$n2.$n3.142"
+        ;;
+    7)
+        BTT_IP="$n1.$n2.$n3.113/28"
+        BTT_GW="$n1.$n2.$n3.113"
+        BTT_BRD="$n1.$n2.$n3.127"
+        BTT_START="$n1.$n2.$n3.114"
+        BTT_END="$n1.$n2.$n3.126"
+        ;;
+    6)
+        BTT_IP="$n1.$n2.$n3.97/27"
+        BTT_GW="$n1.$n2.$n3.97"
+        BTT_BRD="$n1.$n2.$n3.127"
+        BTT_START="$n1.$n2.$n3.98"
+        BTT_END="$n1.$n2.$n3.110"
+        ;;
+    5)
+        BTT_IP="$n1.$n2.$n3.81/28"
+        BTT_GW="$n1.$n2.$n3.81"
+        BTT_BRD="$n1.$n2.$n3.95"
+        BTT_START="$n1.$n2.$n3.82"
+        BTT_END="$n1.$n2.$n3.94"
+        ;;
+    4)
+        BTT_IP="$n1.$n2.$n3.65/26"
+        BTT_GW="$n1.$n2.$n3.65"
+        BTT_BRD="$n1.$n2.$n3.127"
+        BTT_START="$n1.$n2.$n3.66"
+        BTT_END="$n1.$n2.$n3.78"
+        ;;
+    3)
+        BTT_IP="$n1.$n2.$n3.49/28"
+        BTT_GW="$n1.$n2.$n3.49"
+        BTT_BRD="$n1.$n2.$n3.63"
+        BTT_START="$n1.$n2.$n3.50"
+        BTT_END="$n1.$n2.$n3.62"
+        ;;
+    2)
+        BTT_IP="$n1.$n2.$n3.33/27"
+        BTT_GW="$n1.$n2.$n3.33"
+        BTT_BRD="$n1.$n2.$n3.63"
+        BTT_START="$n1.$n2.$n3.34"
+        BTT_END="$n1.$n2.$n3.46"
+        ;;
+    1)
+        BTT_IP="$n1.$n2.$n3.17/28"
+        BTT_GW="$n1.$n2.$n3.17"
+        BTT_BRD="$n1.$n2.$n3.31"
+        BTT_START="$n1.$n2.$n3.18"
+        BTT_END="$n1.$n2.$n3.30"
+        ;;
+    *)
+        BTT_IP="$n1.$n2.$n3.1/24"
+        BTT_GW="$n1.$n2.$n3.1"
+        BTT_BRD="$n1.$n2.$n3.255"
+        BTT_START="$n1.$n2.$n3.2"
+        BTT_END="$n1.$n2.$n3.14"
+        ;;
+    esac
+}
+
+config_8_btt()
+{
+    n1=$(echo $BTT_NET | cut -d '.' -f1)
+    n2=$(echo $BTT_NET | cut -d '.' -f2)
+    n3=$(echo $BTT_NET | cut -d '.' -f3)
+    case $btt_node in
+    7)
+        BTT_IP="$n1.$n2.$n3.225/27"
+        BTT_GW="$n1.$n2.$n3.225"
+        BTT_BRD="$n1.$n2.$n3.255"
+        BTT_START="$n1.$n2.$n3.226"
+        BTT_END="$n1.$n2.$n3.254"
+        ;;
+    6)
+        BTT_IP="$n1.$n2.$n3.193/26"
+        BTT_GW="$n1.$n2.$n3.193"
+        BTT_BRD="$n1.$n2.$n3.255"
+        BTT_START="$n1.$n2.$n3.194"
+        BTT_END="$n1.$n2.$n3.222"
+        ;;
+    5)
+        BTT_IP="$n1.$n2.$n3.161/27"
+        BTT_GW="$n1.$n2.$n3.161"
+        BTT_BRD="$n1.$n2.$n3.191"
+        BTT_START="$n1.$n2.$n3.162"
+        BTT_END="$n1.$n2.$n3.190"
+        ;;
+    4)
+        BTT_IP="$n1.$n2.$n3.129/25"
+        BTT_GW="$n1.$n2.$n3.129"
+        BTT_BRD="$n1.$n2.$n3.255"
+        BTT_START="$n1.$n2.$n3.130"
+        BTT_END="$n1.$n2.$n3.158"
+        ;;
+    3)
+        BTT_IP="$n1.$n2.$n3.97/27"
+        BTT_GW="$n1.$n2.$n3.97"
+        BTT_BRD="$n1.$n2.$n3.127"
+        BTT_START="$n1.$n2.$n3.98"
+        BTT_END="$n1.$n2.$n3.126"
+        ;;
+    2)
+        BTT_IP="$n1.$n2.$n3.65/26"
+        BTT_GW="$n1.$n2.$n3.65"
+        BTT_BRD="$n1.$n2.$n3.127"
+        BTT_START="$n1.$n2.$n3.66"
+        BTT_END="$n1.$n2.$n3.94"
+        ;;
+    1)
+        BTT_IP="$n1.$n2.$n3.33/27"
+        BTT_GW="$n1.$n2.$n3.33"
+        BTT_BRD="$n1.$n2.$n3.63"
+        BTT_START="$n1.$n2.$n3.34"
+        BTT_END="$n1.$n2.$n3.62"
+        ;;
+    *)
+        BTT_IP="$n1.$n2.$n3.1/24"
+        BTT_GW="$n1.$n2.$n3.1"
+        BTT_BRD="$n1.$n2.$n3.255"
+        BTT_START="$n1.$n2.$n3.2"
+        BTT_END="$n1.$n2.$n3.30"
+        ;;
+    esac
+}
+
+config_4_btt()
+{
+    n1=$(echo $BTT_NET | cut -d '.' -f1)
+    n2=$(echo $BTT_NET | cut -d '.' -f2)
+    n3=$(echo $BTT_NET | cut -d '.' -f3)
+    case $btt_node in
+    3)
+        BTT_IP="$n1.$n2.$n3.193/26"
+        BTT_GW="$n1.$n2.$n3.193"
+        BTT_BRD="$n1.$n2.$n3.255"
+        BTT_START="$n1.$n2.$n3.194"
+        BTT_END="$n1.$n2.$n3.254"
+        ;;
+    2)
+        BTT_IP="$n1.$n2.$n3.129/25"
+        BTT_GW="$n1.$n2.$n3.129"
+        BTT_BRD="$n1.$n2.$n3.255"
+        BTT_START="$n1.$n2.$n3.130"
+        BTT_END="$n1.$n2.$n3.190"
+        ;;
+    1)
+        BTT_IP="$n1.$n2.$n3.65/26"
+        BTT_GW="$n1.$n2.$n3.65"
+        BTT_BRD="$n1.$n2.$n3.127"
+        BTT_START="$n1.$n2.$n3.66"
+        BTT_END="$n1.$n2.$n3.126"
+        ;;
+    *)
+        BTT_IP="$n1.$n2.$n3.1/24"
+        BTT_GW="$n1.$n2.$n3.1"
+        BTT_BRD="$n1.$n2.$n3.255"
+        BTT_START="$n1.$n2.$n3.2"
+        BTT_END="$n1.$n2.$n3.62"
+        ;;
+    esac
+}
+
+config_2_btt()
+{
+    n1=$(echo $BTT_NET | cut -d '.' -f1)
+    n2=$(echo $BTT_NET | cut -d '.' -f2)
+    n3=$(echo $BTT_NET | cut -d '.' -f3)
+    case $btt_node in
+    1)
+        BTT_IP="$n1.$n2.$n3.129/25"
+        BTT_GW="$n1.$n2.$n3.129"
+        BTT_BRD="$n1.$n2.$n3.255"
+        BTT_START="$n1.$n2.$n3.130"
+        BTT_END="$n1.$n2.$n3.254"
+        ;;
+    *)
+        BTT_IP="$n1.$n2.$n3.1/24"
+        BTT_GW="$n1.$n2.$n3.1"
+        BTT_BRD="$n1.$n2.$n3.255"
+        BTT_START="$n1.$n2.$n3.2"
+        BTT_END="$n1.$n2.$n3.126"
+        ;;
+    esac
+}
+
+check_btt()
+{
+    btt_if=$(ifconfig | grep $BTT_IF | awk '{print $1}')
+    if [ -z "$btt_if" ]; then
+        stop_btt
+    fi
+    if [ ! -e "$BTT_DHCP_LEASE" ]; then
+        btt_node=""
+        if [ "$BTT_LOCAL" != "$BTT_COUNT" ]; then
+            btt_node=$BTT_LOCAL
+        elif [ -e "$BTT_INFO" ]; then
+            btt_node=$(cat $BTT_INFO | grep 'Node ID:' | awk '{print $3}')
         fi
-    elif [ "$gw4" = "65" ]; then
-        ping_test="$gw1.$gw2.$gw3.97"
-        ping -I $SON_WAN_IF "$ping_test" -c 1 -W 5 -s 20 > /dev/null 2>&1
-        if [ "$?" != "0" ]; then
-            SON_IP="$gw1.$gw2.$gw3.97/27"
-            SON_BRD="$gw1.$gw2.$gw3.127"
-            SON_GW="$gw1.$gw2.$gw3.97"
-            SON_START="$gw1.$gw2.$gw3.99"
-            SON_END="$gw1.$gw2.$gw3.126"
-            dnsmasq_son
-        fi
-    elif [ "$gw4" = "129" ]; then
-        ping_test="$gw1.$gw2.$gw3.193"
-        ping -I $SON_WAN_IF "$ping_test" -c 1 -W 5 -s 20 > /dev/null 2>&1
-        if [ "$?" != "0" ]; then
-            SON_IP="$gw1.$gw2.$gw3.193/25"
-            SON_BRD="$gw1.$gw2.$gw3.255"
-            SON_GW="$gw1.$gw2.$gw3.193"
-            SON_START="$gw1.$gw2.$gw3.195"
-            SON_END="$gw1.$gw2.$gw3.222"
-            dnsmasq_son
-        else
-            ping_test="$gw1.$gw2.$gw3.161"
-            ping -I $SON_WAN_IF "$ping_test" -c 1 -W 5 -s 20 > /dev/null 2>&1
-            if [ "$?" != "0" ]; then
-                SON_IP="$gw1.$gw2.$gw3.161/27"
-                SON_BRD="$gw1.$gw2.$gw3.191"
-                SON_GW="$gw1.$gw2.$gw3.161"
-                SON_START="$gw1.$gw2.$gw3.163"
-                SON_END="$gw1.$gw2.$gw3.190"
-                dnsmasq_son
-            fi
-        fi
-    elif [ "$gw4" = "193" ]; then
-        ping_test="$gw1.$gw2.$gw3.225"
-        ping -I $SON_WAN_IF "$ping_test" -c 1 -W 5 -s 20 > /dev/null 2>&1
-        if [ "$?" != "0" ]; then
-            SON_IP="$gw1.$gw2.$gw3.225/27"
-            SON_BRD="$gw1.$gw2.$gw3.255"
-            SON_GW="$gw1.$gw2.$gw3.225"
-            SON_START="$gw1.$gw2.$gw3.227"
-            SON_END="$gw1.$gw2.$gw3.254"
-            dnsmasq_son
+        if [ -n "$btt_node" ]; then
+            case $BTT_COUNT in
+            16)
+                config_16_btt
+                ;;
+            8)
+                config_8_btt
+                ;;
+            4)
+                config_4_btt
+                ;;
+            *)
+                config_2_btt
+                ;;
+            esac
+            dnsmasq_btt
         fi
     fi
 }
 
-check_son()
-{
-    if [ "$1" != "$SON_WAN_IF" ] || [ "$2" != "$SON_WAN_GW" ]; then
-        SON_WAN_IF=$1
-        SON_WAN_GW=$2
-        update_son
-    fi
-}
-
-stop_son()
+stop_btt()
 {
     kill_all "$DNSMASQ"
-    if [ -e "$LAN_DHCP_LEASE2" ]; then
-        rm -f $LAN_DHCP_LEASE2
+    if [ -e "$BTT_DHCP_LEASE" ]; then
+        rm -f $BTT_DHCP_LEASE
     fi
-    if [ -n "$SON_MAC" ]; then
-        ifconfig $SON_IF down 
-        del_route $SON_IF
-        del_addr $SON_IF
-        del_eth_son
-        del_enx_son
-        del_usb_son
+    if [ -n "$BTT_MAC" ]; then
+        ifconfig $BTT_IF down 
+        del_route $BTT_IF
+        del_addr $BTT_IF
+        del_eth_btt
+        del_enx_btt
+        del_usb_btt
     fi
-    SON_WAN_IF=""
-    SON_WAN_GW=""
 }
 
-init_son()
+init_btt()
 {
-    SON_IF="$LAN_IF"
-    if [ -z "$SON_IF" ]; then
+    BTT_IF="$LAN_IF"
+    if [ -z "$BTT_IF" ]; then
         return
     fi
-    SON_MAC=""
-    son_if=$(ifconfig -a | grep $SON_IF | awk '{print $1}')
-    if [ -n "$son_if" ]; then
-        SON_MAC=$(ip addr show dev $SON_IF | grep 'link/' | awk '{print $2}')
+    BTT_MAC=""
+    btt_if=$(ifconfig -a | grep $BTT_IF | awk '{print $1}')
+    if [ -n "$btt_if" ]; then
+        BTT_MAC=$(ip addr show dev $BTT_IF | grep 'link/' | awk '{print $2}')
     fi
-    stop_son
-    if [ "$SON_OP" = "1" ]; then
+    stop_btt
+    if [ "$BTT_OP" = "1" ]; then
         mac2=$(echo $ETH_MAC | cut -d ':' -f2)
         mac3=$(echo $ETH_MAC | cut -d ':' -f3)
         mac4=$(echo $ETH_MAC | cut -d ':' -f4)
         mac5=$(echo $ETH_MAC | cut -d ':' -f5)
         mac6=$(echo $ETH_MAC | cut -d ':' -f6)
         mac="ee:$mac2:$mac3:$mac4:$mac5:$mac6"
-        if [ "$SON_MAC" != "$mac" ]; then
-            if [ -n "$SON_MAC" ]; then
-                brctl delbr $SON_IF > /dev/null 2>&1
+        if [ "$BTT_MAC" != "$mac" ]; then
+            if [ -n "$BTT_MAC" ]; then
+                brctl delbr $BTT_IF > /dev/null 2>&1
             fi
-            SON_MAC="$mac"
-            brctl addbr $SON_IF > /dev/null 2>&1
-            brctl setfd $SON_IF 1 > /dev/null 2>&1
-            ip link set dev $SON_IF address $SON_MAC > /dev/null 2>&1
+            BTT_MAC="$mac"
+            brctl addbr $BTT_IF > /dev/null 2>&1
+            brctl setfd $BTT_IF 1 > /dev/null 2>&1
+            ip link set dev $BTT_IF address $BTT_MAC > /dev/null 2>&1
         fi
+        ifconfig $BTT_IF 0.0.0.0 up
     fi
 }
 
@@ -552,6 +756,7 @@ start_lan()
 
 config_lan()
 {
+    lan_net=$(echo $LAN_NET | cut -d '/' -f1)
     echo -n > $LAN_DHCP_CONF
     {
         if [ -n "$DNSADDR" ]; then
@@ -561,7 +766,7 @@ config_lan()
         fi
         echo "default-lease-time 28800;"
         echo "max-lease-time 7200;"
-        echo "subnet $LAN_NET netmask $LAN_MASK {"
+        echo "subnet $lan_net netmask $LAN_MASK {"
         echo "  range $LAN_START $LAN_END;"
         echo "  option routers $LAN_GW;"
         echo "}"
@@ -625,30 +830,6 @@ init_lan()
         fi
         ifconfig $LAN_IF 0.0.0.0 up
     fi
-}
-
-#*******************#
-# BTT Radio Metrics #
-#*******************#
-dump_btt_phy()
-{
-    phy1=$1
-    phy2=$2
-    phy3=$3
-    phy4=$4
-    echo -n > $PHY_INFO
-    {
-        echo "BTT info:"
-        if [ -n "$phy3" ]; then
-            echo "  LAN_CHAN=$phy3"
-            echo "  LAN_BAND=$phy4"
-            echo "  WAN_RSSI=$phy1"
-            echo "  WAN_RATE=$phy2"
-        else
-            echo "  LAN_CHAN=$phy1"
-            echo "  LAN_BAND=$phy2"
-        fi
-    } >> $PHY_INFO
 }
 
 #*******************#
@@ -743,6 +924,9 @@ reset_wln()
         if [ -n "$pid" ]; then
             kill $pid
         fi
+        if [ -e "$PHY_INFO" ]; then
+            rm -f $PHY_INFO
+        fi
         if [ -e "$BTT_INFO" ]; then
             rm -f $BTT_INFO
         fi
@@ -771,7 +955,7 @@ check_wln()
         ifconfig $WLN_IF up
         return
     fi
-    pid=$(ps -ef | grep $WLN_CONF | awk '{print $2}')
+    pid=$(ps -ef | grep $WLNCONF | awk '{print $2}')
     fid=$(cat $WLN_PID)
     for pi in $pid; do
         if [ "$pi" = "$fid" ]; then
@@ -803,6 +987,7 @@ check_wln()
             $BTTNODE -l $WLN_IF -m $BTT_COUNT -n $BTT_LOCAL &
             return
         fi
+        check_btt
     fi
     if [ "$LAN_OP" = "1" ]; then
         check_lan
@@ -843,7 +1028,7 @@ check_wln()
 
 link_wln()
 {
-    pid=$(ps -ef | grep $WLN_CONF | awk '{print $2}')
+    pid=$(ps -ef | grep $WLNCONF | awk '{print $2}')
     fid=$(cat $WLN_PID)
     for pi in $pid; do
         if [ "$pi" = "$fid" ]; then
@@ -888,39 +1073,62 @@ link_wln()
 start_wln()
 {
     ifconfig $WLN_IF 0.0.0.0 up
-    if [ "$VAP_OP" = "1" ]; then
+    if [ "$VAP_OP" = "1" ] && [ "$WLN_WDS" = "1" ]; then
         if [ "$WLN_WAN" = "1" ] && [ "$VAP_WAN" = "1" ]; then
-            WLN_CONF=$VAP_CONF22
+            WLNCONF=$VAP_CONF42
         elif [ "$WLN_WAN" = "1" ]; then
-            WLN_CONF=$VAP_CONF21
+            WLNCONF=$VAP_CONF41
         elif [ "$WLN_WAN" = "0" ] && [ "$VAP_WAN" = "1" ]; then
-            WLN_CONF=$VAP_CONF12
+            WLNCONF=$VAP_CONF32
         else
-            WLN_CONF=$VAP_CONF11
+            WLNCONF=$VAP_CONF31
+        fi
+    elif [ "$VAP_OP" = "1" ]; then
+        if [ "$WLN_WAN" = "1" ] && [ "$VAP_WAN" = "1" ]; then
+            WLNCONF=$VAP_CONF22
+        elif [ "$WLN_WAN" = "1" ]; then
+            WLNCONF=$VAP_CONF21
+        elif [ "$WLN_WAN" = "0" ] && [ "$VAP_WAN" = "1" ]; then
+            WLNCONF=$VAP_CONF12
+        else
+            WLNCONF=$VAP_CONF11
         fi
     else
-        if [ "$WLN_WDS" = "1" ] && [ "$WLN_WAN" = "1" ]; then
-            WLN_CONF=$WLN_CONF22
-        elif [ "$WLN_WDS" = "1" ]; then
-            WLN_CONF=$WLN_CONF21
-        elif [ "$WLN_WDS" = "0" ] && [ "$WLN_WAN" = "1" ]; then
-            WLN_CONF=$WLN_CONF12
-        else
-            WLN_CONF=$WLN_CONF11
+        sed '/bridge=/d' $WLN_CONF > tmpconf
+        sed '/wds_sta=/d' tmpconf > $WLN_CONF
+        rm -f tmpconf
+        if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
+            tmpchan=$STX_CHAN
+            if [ $tmpchan -lt 15 ]; then
+                sed '/channel=/d' $WLN_CONF > tmpconf
+                mv -f tmpconf $WLN_CONF
+                tmpchan=$(($tmpchan + 6))
+                if [ $tmpchan -gt 11 ]; then
+                    tmpchan=$(($tmpchan - 11))
+                fi
+                echo channel=$tmpchan >> $WLN_CONF
+            fi
         fi
+        echo "wds_sta=$WLN_WDS" >> $WLN_CONF
+        if [ "$WLN_WAN" = "1" ]; then
+            echo "bridge=br-wan" >> $WLN_CONF
+        else
+            echo "bridge=br-lan" >> $WLN_CONF
+        fi
+        WLNCONF=$WLN_CONF
     fi
-    WLN_CHAN=$(cat $WLN_CONF | grep 'channel=' | cut -d '=' -f2)
+    WLN_CHAN=$(cat $WLNCONF | grep 'channel=' | cut -d '=' -f2)
     if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "0" ]; then
-        dump_btt_phy $WLN_CHAN $BTT_CHAN_BAND
+        dump_phy_btt $WLN_CHAN $BTT_CHAN_BAND
     fi
     if [ "$WLN_DBG" = "3" ]; then
-        $HOSTAPD -B -P $WLN_PID -t -f $WLN_LOG -d -K $WLN_CONF > /dev/null 2>&1
+        $HOSTAPD -B -P $WLN_PID -t -f $WLN_LOG -d -K $WLNCONF > /dev/null 2>&1
     elif [ "$WLN_DBG" = "2" ]; then
-        $HOSTAPD -B -P $WLN_PID -t -f $WLN_LOG -d $WLN_CONF > /dev/null 2>&1
+        $HOSTAPD -B -P $WLN_PID -t -f $WLN_LOG -d $WLNCONF > /dev/null 2>&1
     elif [ "$WLN_DBG" = "1" ]; then
-        $HOSTAPD -B -P $WLN_PID -t -f $WLN_LOG $WLN_CONF > /dev/null 2>&1
+        $HOSTAPD -B -P $WLN_PID -t -f $WLN_LOG $WLNCONF > /dev/null 2>&1
     else
-        $HOSTAPD -B -P $WLN_PID -t $WLN_CONF > /dev/null 2>&1
+        $HOSTAPD -B -P $WLN_PID -t $WLNCONF > /dev/null 2>&1
     fi
     WLN_STATE="STARTED"
     WLN_LINK_COUNT=10
@@ -959,7 +1167,7 @@ init_wln()
         WLN_IF=""
         return
     fi
-    if [ "$WLN_OP" = "1" ]; then
+    if [ "$WLN_OP" = "1" ] && [ "$BTT_OP" != "1" -o "$BTT_LOCAL" = "0" ]; then
         WLN_STATE="STARTING"
     fi
 }
@@ -1130,20 +1338,20 @@ link_sap()
 
 start_sap()
 {
-    if [ "$SAP_WDS" = "1" ] && [ "$SAP_WAN" = "1" ]; then
-       SAP_CONF=$SAP_CONF22
-    elif [ "$SAP_WDS" = "1" ]; then
-        SAP_CONF=$SAP_CONF21
-    elif [ "$SAP_WDS" = "0" ] && [ "$SAP_WAN" = "1" ]; then
-        SAP_CONF=$SAP_CONF12
-    else
-        SAP_CONF=$SAP_CONF11
-    fi
+    sed '/bridge=/d' $SAP_CONF > tmpconf
+    sed '/wds_sta=/d' tmpconf > $SAP_CONF
+    rm -f tmpconf
     if [ $SAP_CHAN -ne $STA_CHAN ]; then
-        sed '/channel=/d' $SAP_CONF > /tmp/hostapd-sap0.conf
-        mv -f /tmp/hostapd-sap0.conf $SAP_CONF
+        sed '/channel=/d' $SAP_CONF > tmpconf
+        mv -f tmpconf $SAP_CONF
         echo channel=$STA_CHAN >> $SAP_CONF
         SAP_CHAN=$STA_CHAN
+    fi
+    echo "wds_sta=$SAP_WDS" >> $SAP_CONF
+    if [ "$SAP_WAN" = "1" ]; then
+        echo "bridge=br-wan" >> $SAP_CONF
+    else
+        echo "bridge=br-lan" >> $SAP_CONF
     fi
     if [ "$SAP_DBG" = "3" ]; then
         $HOSTAPD -B -P $SAP_PID -t -f $SAP_LOG -d -K $SAP_CONF > /dev/null 2>&1
@@ -1334,11 +1542,7 @@ dump_sta()
         if [ -n "$STA_BSSID" ]; then
             echo "  STA_SSID=\"$STA_SSID\""
             echo "  STA_BSSID=$STA_BSSID"
-            if [ "$WIFI_PCI" = "wlp12s0" ]; then
-                echo "  STA_FREQ=$STA_CHAN"
-            else
-                echo "  STA_CHAN=$STA_CHAN"
-            fi
+            echo "  STA_FREQ=$STA_FREQ"
             echo "  STA_WDS=$PCI_WDS"
         fi
     } >> $STA_INFO
@@ -1346,8 +1550,8 @@ dump_sta()
 
 clean_sta()
 {
-    if [ "$SON_OP" = "1" ]; then
-        stop_son
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ -e "$BTT_DHCP_LEASE" ]; then
+        stop_btt
     fi
     if [ "$BRI_OP" = "2" ]; then
         brif=$(brctl show $BRI_IF | grep $STA_IF) > /dev/null 2>&1
@@ -1371,6 +1575,7 @@ clean_sta()
     del_route $STA_WAN_IF
     del_addr $STA_WAN_IF
     STA_WAN_GW=""
+    STA_WAN_IP=""
 }
 
 static_sta()
@@ -1441,13 +1646,22 @@ bssid_sta()
         fi
         STA_SSID="$sta_ssid"
     fi
-    if [ "$WIFI_PCI" = "wlp12s0" ]; then
-        STA_CHAN=$($IWUTILS dev $STA_IF link | grep freq | awk '{print $2}') > /dev/null 2>&1
-        logger "STA ($STA_IF) info: \"$STA_SSID\" (bssid: $STA_BSSID freq: $STA_CHAN)"
+    STA_CHAN=$($IWUTILS dev $STA_IF info | grep channel | awk '{print $2}') > /dev/null 2>&1
+    if [ -n "$STA_CHAN" ]; then
+        if [ $STA_CHAN -gt 30 ]; then
+            STA_FREQ=$((5000 + ($STA_CHAN * 5)))
+        else
+            STA_FREQ=$((2407 + ($STA_CHAN * 5)))
+        fi
     else
-        STA_CHAN=$($IWUTILS dev $STA_IF info | grep channel | awk '{print $2}') > /dev/null 2>&1
-        logger "STA ($STA_IF) info: \"$STA_SSID\" (bssid: $STA_BSSID channel: $STA_CHAN)"
+        STA_FREQ=$($IWUTILS dev $STA_IF link | grep freq | awk '{print $2}') > /dev/null 2>&1
+        if [ $STA_FREQ -gt 5000 ]; then
+            STA_CHAN=$((($STA_FREQ - 5000) / 5))
+        else
+            STA_CHAN=$((($STA_FREQ - 2407) / 5))
+        fi
     fi
+    logger "STA ($STA_IF) info: \"$STA_SSID\" (bssid: $STA_BSSID freq: $STA_FREQ)"
     STA_RATE=""
     STA_RSSI=""
     STA_WAN_GW=""
@@ -1462,22 +1676,6 @@ lost_sta()
     logger "STA ($STA_IF) info: lost AP (bssid: $STA_BSSID)"
     if [ "$ETH_OP" = "1" ] && [ $ETH_PHY_UP -eq 1 ]; then
         ETH_STATE="ATTACHED"
-    fi
-    if [ "$BTT_OP" = "1" ]; then
-        pid=$(pgrep -f $BTTNODE)
-        if [ -n "$pid" ]; then
-            kill $pid
-        fi
-        if [ -e "$PHY_INFO" ]; then
-            rm -f $PHY_INFO
-        fi
-        if [ -e "$BTT_INFO" ]; then
-            rm -f $BTT_INFO
-        fi
-        bttlocal=$(($BTT_LOCAL % 2))
-        if [ "$bttlocal" = "0" ]; then
-            reset_wlx
-        fi
     fi
     if [ "$SAP_OP" = "1" ]; then
         reset_sap
@@ -1504,11 +1702,6 @@ check_sta()
         sleep 1
         return
     fi
-    staphy=$(cat /sys/class/net/$STA_IF/operstate) > /dev/null 2>&1
-    if [ "$staphy" = "down" ]; then
-        ifconfig $STA_IF up
-        return
-    fi
     pid=$(ps -ef | grep $STA_CONF | awk '{print $2}')
     fid=$(cat $STA_PID)
     for pi in $pid; do
@@ -1517,28 +1710,43 @@ check_sta()
         fi
     done
     if [ "$pi" != "$fid" ]; then
+        logger "STA ($STA_IF) info: process killed"
         lost_sta
         return
     fi
-    bssid=$($IWUTILS dev $STA_IF link | grep Connected | awk '{print $3}') > /dev/null 2>&1
-    if [ -n "$bssid" ] && [ "$bssid" != "$STA_BSSID" ]; then
-        lost_sta
-        return
-    fi
-    if [ -z "$bssid" ]; then
-        STA_LOST_BSSID=$(($STA_LOST_BSSID + 1))
-        if [ $STA_LOST_BSSID -ge 3 ]; then
-            STA_LOST_BSSID=0
+    staphy=$(cat /sys/class/net/$STA_IF/operstate) > /dev/null 2>&1
+    if [ "$staphy" = "down" ]; then
+        logger "STA ($STA_IF) info: interface down"
+        STA_IFACE_DOWN=$(($STA_IFACE_DOWN + 1))
+        if [ $STA_IFACE_DOWN -gt 5 ]; then
+            STA_IFACE_DOWN=0
             lost_sta
+            return
         fi
+        ifconfig $STA_IF up
         return
     fi
-    STA_LOST_BSSID=0
-    BTT_PHY_UPDATE=0
+    STA_IFACE_DOWN=0
+    bssid=$($IWUTILS dev $STA_IF link | grep Connected | awk '{print $3}') > /dev/null 2>&1
+    if [ -z "$bssid" ]; then
+        lost_sta
+        return
+    fi
+    if [ "$bssid" != "$STA_BSSID" ]; then
+        if [ "$STA_ACL" = "0" ] || [ "$STA_ACL" = "1" ] || [ "$BTT_OP" = "1" -a "$BTT_LOCAL" != "0" ]; then
+            logger "STA ($STA_IF) info: reconnect forced"
+            lost_sta
+            return
+        fi
+        clean_sta
+        STA_BSSID="$bssid"
+        return
+    fi
     rssi=$($IWUTILS dev $STA_IF link | grep 'signal:' | awk '{print $2}') > /dev/null 2>&1    
     if [ -z "$rssi" ]; then
         return
     fi
+    BTT_PHY_UPDATE=0
     if [ -z "$STA_RSSI" ]; then
         STA_RSSI=$rssi
         STA_RSSI_SHOW=$STX_RSSI
@@ -1575,16 +1783,49 @@ check_sta()
             STA_RATE=$rate
         fi
         if [ "$BTT_PHY_UPDATE" = "1" ]; then
-            dump_btt_phy $STA_RSSI $STA_RATE $WLX_CHAN $BTT_CHAN_BAND
+            dump_phy_btt $STA_RSSI $STA_RATE $WLX_CHAN $BTT_CHAN_BAND
             return
         fi
         pid=$(pgrep -f $BTTNODE)
         if [ -z "$pid" ]; then
             $BTTNODE -l $WLX_IF -m $BTT_COUNT -n $BTT_LOCAL -p $STA_BSSID -w $STA_IF &
+            if [ "$BTT_LOCAL" = "$BTT_COUNT" ]; then
+                BTT_NODE_CHAIN_COUNT=0
+                sed '/denylist={/,$d' $STA_CONF > tmpconf
+                sed '/acceptlist={/,$d' tmpconf > $STA_CONF
+                rm -f tmpconf
+            fi
             return
         fi
+        if [ "$BTT_LOCAL" = "$BTT_COUNT" ] && [ ! -e "$BTT_INFO" ]; then
+            BTT_NODE_CHAIN_COUNT=$(($BTT_NODE_CHAIN_COUNT + 1))
+            if [ $BTT_NODE_CHAIN_COUNT -gt 10 ]; then
+                BTT_NODE_CHAIN_COUNT=0
+                {
+                    echo "denylist={"
+                    echo "  $STA_BSSID"
+                    echo "}"
+                    echo "acl_policy=0"
+                } >> $STA_CONF
+                lost_sta
+            fi
+            return
+        fi
+        if [ -n "$STA_WAN_GW" ]; then
+            if [ "$BTT_LOCAL" = "$BTT_COUNT" ]; then
+                sed '/acceptlist={/,$d' $STA_CONF > tmpconf
+                mv -f tmpconf $STA_CONF
+                {
+                    echo "acceptlist={"
+                    echo "  $STA_BSSID"
+                    echo "}"
+                    echo "acl_policy=1"
+                } >> $STA_CONF
+            fi
+            check_btt
+        fi
     fi
-    if [ "$STA_ROAM_OFF" = "0" ]; then
+    if [ "$STA_AUTO_ROAM" = "2" ]; then
         STA_ROAM_FULL_SCAN=$(($STA_ROAM_FULL_SCAN + 1))
         STA_ROAM_FAST_SCAN=$(($STA_ROAM_FAST_SCAN + 1))
         if [ $STA_ROAM_FULL_SCAN -ge 55 ] && [ $STA_ROAM_FAST_SCAN -ge 5 ]; then
@@ -1733,9 +1974,6 @@ check_sta()
         STA_WAN_COUNT=15
         add_network_dns
         dump_wan_sta
-        if [ "$SON_OP" = "1" ]; then
-            check_son "$STA_WAN_IF" "$STA_WAN_GW"
-        fi
     fi
     if [ "$ENX_OP" = "1" ] && [ "$ENX_STATE" = "ATTACHED" ]; then
         for enx_route in $(ip route | grep dev.*$ENX_IF | awk '{print $1}'); do
@@ -1816,7 +2054,10 @@ link_sta()
         if [ -n "$bssid" ]; then
             bssid_sta "$bssid"
             dump_sta
-            STA_LOST_BSSID=0
+            if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ -z "$WLX_STATE" ]; then
+                WLX_STATE="STARTING"
+            fi
+            STA_IFACE_DOWN=0
             STA_STATE="COMPLETED"
             return
         fi
@@ -1832,6 +2073,29 @@ link_sta()
 start_sta()
 {
     ifconfig $STA_IF 0.0.0.0 up
+    sed '/auto_roam=/d' $STA_CONF > tmpconf
+    sed '/acl_policy=/d' tmpconf > $STA_CONF
+    rm -f tmpconf
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
+        sta_acl=$(cat $STA_CONF | grep acceptlist)
+        if [ -n "$sta_acl" ]; then
+            echo "acl_policy=1" >> $STA_CONF
+        else
+            echo "acl_policy=0" >> $STA_CONF
+        fi
+        echo "auto_roam=0" >> $STA_CONF
+    else
+        if [ "$STA_ACL" != "0" ]; then
+            sed '/denylist={/,$d' $STA_CONF > tmpconf
+            mv -f tmpconf $STA_CONF
+        fi
+        if [ "$STA_ACL" != "1" ]; then
+            sed '/acceptlist={/,$d' $STA_CONF > tmpconf
+            mv -f tmpconf $STA_CONF
+        fi
+        echo "acl_policy=$STA_ACL" >> $STA_CONF
+        echo "auto_roam=$STA_AUTO_ROAM" >> $STA_CONF
+    fi
     if [ "$BRI_OP" = "2" ]; then
         if [ "$STA_DBG" = "3" ]; then
             $WPASUPP -i $STA_IF -B -D "nl80211" -P $STA_PID -b $BRI_IF -t -f $STA_LOG -d -K -c $STA_CONF > /dev/null 2>&1
@@ -1862,6 +2126,20 @@ start_sta()
 
 stop_sta()
 {
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
+        pid=$(pgrep -f $BTTNODE)
+        if [ -n "$pid" ]; then
+            kill $pid
+        fi
+        if [ -e "$PHY_INFO" ]; then
+            rm -f $PHY_INFO
+        fi
+        if [ -e "$BTT_INFO" ]; then
+            rm -f $BTT_INFO
+        fi
+        stop_wlx
+        WLX_STATE=""
+    fi
     kill_one "$STA_PID"
     if [ -e $STA_CTRL ]; then
         rm -rf $STA_CTRL
@@ -1960,6 +2238,9 @@ reset_wlx()
         if [ -n "$pid" ]; then
             kill $pid
         fi
+        if [ -e "$PHY_INFO" ]; then
+            rm -f $PHY_INFO
+        fi
         if [ -e "$BTT_INFO" ]; then
             rm -f $BTT_INFO
         fi
@@ -2020,6 +2301,7 @@ check_wlx()
             $BTTNODE -l $WLX_IF -m $BTT_COUNT -n $BTT_LOCAL &
             return
         fi
+        check_btt
     fi
     if [ "$LAN_OP" = "1" ]; then
         check_lan
@@ -2098,10 +2380,34 @@ link_wlx()
 start_wlx()
 {
     ifconfig $WLX_IF 0.0.0.0 up
+    sed '/bridge=/d' $WLX_CONF > tmpconf
+    mv -f tmpconf $WLX_CONF
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
+        sed '/channel=/d' $WLX_CONF > tmpconf
+        mv -f tmpconf $WLX_CONF
+        tmpchan=$STA_CHAN
+        if [ $tmpchan -gt 100 ]; then
+            tmpchan=$(($tmpchan + 8))
+            if [ $tmpchan -gt 161 ]; then
+                tmpchan=$(($tmpchan - 16))
+            fi
+        elif [ $tmpchan -gt 30 ]; then
+            tmpchan=$(($tmpchan + 8))
+            if [ $tmpchan -gt 48 ]; then
+                tmpchan=$(($tmpchan - 16))
+            fi
+        else
+            tmpchan=$(($tmpchan + 6))
+            if [ $tmpchan -gt 11 ]; then
+                tmpchan=$(($tmpchan - 11))
+            fi
+        fi
+        echo channel=$tmpchan >> $WLX_CONF
+    fi
     if [ "$WLX_WAN" = "1" ]; then
-        WLX_CONF=$WLX_CONF2
+        echo "bridge=br-wan" >> $WLX_CONF
     else
-        WLX_CONF=$WLX_CONF1
+        echo "bridge=br-lan" >> $WLX_CONF
     fi
     WLX_CHAN=$(cat $WLX_CONF | grep 'channel=' | cut -d '=' -f2)
     if [ $WLX_CHAN -gt 30 ]; then
@@ -2119,7 +2425,7 @@ start_wlx()
         fi
     fi
     if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ]; then
-        dump_btt_phy $WLX_CHAN $BTT_CHAN_BAND
+        dump_phy_btt $WLX_CHAN $BTT_CHAN_BAND
     fi
     if [ "$WLX_DBG" = "3" ]; then
         $HOSTAPD -B -P $WLX_PID -t -f $WLX_LOG -d -K $WLX_CONF > /dev/null 2>&1
@@ -2167,7 +2473,7 @@ init_wlx()
         WLX_IF=""
         return
     fi
-    if [ "$WLX_OP" = "1" ]; then
+    if [ "$WLX_OP" = "1" ] && [ "$BTT_OP" != "1" -o "$BTT_LOCAL" = "0" ]; then
         WLX_STATE="STARTING"
     fi
 }
@@ -2303,7 +2609,7 @@ dump_stx()
         if [ -n "$STX_BSSID" ]; then
             echo "  STX_SSID=\"$STX_SSID\""
             echo "  STX_BSSID=$STX_BSSID"
-            echo "  STX_FREQ=$STX_CHAN"
+            echo "  STX_FREQ=$STX_FREQ"
             echo "  STX_WDS=$STX_WDS"
         fi
     } >> $STX_INFO
@@ -2311,8 +2617,8 @@ dump_stx()
 
 clean_stx()
 {
-    if [ "$SON_OP" = "1" ]; then
-        stop_son
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ -e "$BTT_DHCP_LEASE" ]; then
+        stop_btt
     fi
     kill_one "$STX_DHCP_PID"
     if [ -e $STX_DHCP_LEASE ]; then
@@ -2325,6 +2631,7 @@ clean_stx()
     del_route $STX_WAN_IF
     del_addr $STX_WAN_IF
     STX_WAN_GW=""
+    STX_WAN_IP=""
 }
 
 static_stx()
@@ -2384,8 +2691,22 @@ bssid_stx()
         fi
         STX_SSID="$stx_ssid"
     fi
-    STX_CHAN=$($IWUTILS dev $STX_IF link | grep freq | awk '{print $2}') > /dev/null 2>&1
-    logger "STX ($STX_IF) info: \"$STX_SSID\" (bssid: $STX_BSSID freq: $STX_CHAN)"
+    STX_CHAN=$($IWUTILS dev $STX_IF info | grep channel | awk '{print $2}') > /dev/null 2>&1
+    if [ -n "$STX_CHAN" ]; then
+        if [ $STX_CHAN -gt 30 ]; then
+            STX_FREQ=$((5000 + ($STX_CHAN * 5)))
+        else
+            STX_FREQ=$((2407 + ($STX_CHAN * 5)))
+        fi
+    else
+        STX_FREQ=$($IWUTILS dev $STX_IF link | grep freq | awk '{print $2}') > /dev/null 2>&1
+        if [ $STX_FREQ -gt 5000 ]; then
+            STX_CHAN=$((($STX_FREQ - 5000) / 5))
+        else
+            STX_CHAN=$((($STX_FREQ - 2407) / 5))
+        fi
+    fi
+    logger "STX ($STX_IF) info: \"$STX_SSID\" (bssid: $STX_BSSID freq: $STX_FREQ)"
     STX_RATE=""
     STX_RSSI=""
     STX_WAN_GW=""
@@ -2398,22 +2719,6 @@ bssid_stx()
 lost_stx()
 {
     logger "STX ($STX_IF) info: lost AP (bssid: $STX_BSSID)"
-    if [ "$BTT_OP" = "1" ] && [ "$STA_OP" = "0" ]; then
-        pid=$(pgrep -f $BTTNODE)
-        if [ -n "$pid" ]; then
-            kill $pid
-        fi
-        if [ -e "$PHY_INFO" ]; then
-            rm -f $PHY_INFO
-        fi
-        if [ -e "$BTT_INFO" ]; then
-            rm -f $BTT_INFO
-        fi
-        bttlocal=$(($BTT_LOCAL % 2))
-        if [ "$bttlocal" = "0" ]; then
-            reset_wln
-        fi
-    fi
     clean_stx
     STX_BSSID=""
     stop_stx
@@ -2433,11 +2738,6 @@ check_stx()
         sleep 1
         return
     fi
-    stxphy=$(cat /sys/class/net/$STX_IF/operstate) > /dev/null 2>&1
-    if [ "$stxphy" = "down" ]; then
-        ifconfig $STX_IF up
-        return
-    fi
     pid=$(ps -ef | grep $STX_CONF | awk '{print $2}')
     fid=$(cat $STX_PID)
     for pi in $pid; do
@@ -2446,28 +2746,43 @@ check_stx()
         fi
     done
     if [ "$pi" != "$fid" ]; then
+        logger "STX ($STX_IF) info: process killed"
         lost_stx
         return
     fi
-    bssid=$($IWUTILS dev $STX_IF link | grep Connected | awk '{print $3}') > /dev/null 2>&1
-    if [ -n "$bssid" ] && [ "$bssid" != "$STX_BSSID" ]; then
-        lost_stx
-        return
-    fi
-    if [ -z "$bssid" ]; then
-        STX_LOST_BSSID=$(($STX_LOST_BSSID + 1))
-        if [ $STX_LOST_BSSID -ge 3 ]; then
-            STX_LOST_BSSID=0
+    stxphy=$(cat /sys/class/net/$STX_IF/operstate) > /dev/null 2>&1
+    if [ "$stxphy" = "down" ]; then
+        logger "STX ($STX_IF) info: interface down"
+        STX_IFACE_DOWN=$(($STX_IFACE_DOWN + 1))
+        if [ $STX_IFACE_DOWN -gt 5 ]; then
+            STX_IFACE_DOWN=0
             lost_stx
+            return
         fi
+        ifconfig $STX_IF up
         return
     fi
-    STX_LOST_BSSID=0
-    BTT_PHY_UPDATE=0
+    STX_IFACE_DOWN=0
+    bssid=$($IWUTILS dev $STX_IF link | grep Connected | awk '{print $3}') > /dev/null 2>&1
+    if [ -z "$bssid" ]; then
+        lost_stx
+        return
+    fi
+    if [ "$bssid" != "$STX_BSSID" ]; then
+        if [ "$STX_ACL" = "0" ] || [ "$STX_ACL" = "1" ] || [ "$BTT_OP" = "1" -a "$BTT_LOCAL" != "0" ]; then
+            logger "STX ($STX_IF) info: reconnect forced"
+            lost_stx
+            return
+        fi
+        clean_stx
+        STX_BSSID="$bssid"
+        return
+    fi
     rssi=$($IWUTILS dev $STX_IF link | grep 'signal:' | awk '{print $2}') > /dev/null 2>&1
     if [ -z "$rssi" ]; then
         return
     fi
+    BTT_PHY_UPDATE=0
     if [ -z "$STX_RSSI" ]; then
         STX_RSSI=$rssi
         STX_RSSI_SHOW=$STX_RSSI
@@ -2501,16 +2816,49 @@ check_stx()
             STX_RATE=$rate
         fi
         if [ "$BTT_PHY_UPDATE" = "1" ]; then
-            dump_btt_phy $STX_RSSI $STX_RATE $WLN_CHAN $BTT_CHAN_BAND
+            dump_phy_btt $STX_RSSI $STX_RATE $WLN_CHAN $BTT_CHAN_BAND
             return
         fi
         pid=$(pgrep -f $BTTNODE)
         if [ -z "$pid" ]; then
             $BTTNODE -l $WLN_IF -m $BTT_COUNT -n $BTT_LOCAL -p $STX_BSSID -w $STX_IF &
+            if [ "$BTT_LOCAL" = "$BTT_COUNT" ]; then
+                BTT_NODE_CHAIN_COUNT=0
+                sed '/denylist={/,$d' $STX_CONF > tmpconf
+                sed '/acceptlist={/,$d' tmpconf > $STX_CONF
+                rm -f tmpconf
+            fi
             return
         fi
+        if [ "$BTT_LOCAL" = "$BTT_COUNT" ] && [ ! -e "$BTT_INFO" ]; then
+            BTT_NODE_CHAIN_COUNT=$(($BTT_NODE_CHAIN_COUNT + 1))
+            if [ $BTT_NODE_CHAIN_COUNT -gt 10 ]; then
+                BTT_NODE_CHAIN_COUNT=0
+                {
+                    echo "denylist={"
+                    echo "  $STX_BSSID"
+                    echo "}"
+                    echo "acl_policy=0"
+                } >> $STX_CONF
+                lost_stx
+            fi
+            return
+        fi
+        if [ -n "$STX_WAN_GW" ]; then
+            if [ "$BTT_LOCAL" = "$BTT_COUNT" ]; then
+                sed '/acceptlist={/,$d' $STX_CONF > tmpconf
+                mv -f tmpconf $STX_CONF
+                {
+                    echo "acceptlist={"
+                    echo "  $STX_BSSID"
+                    echo "}"
+                    echo "acl_policy=1"
+                } >> $STX_CONF
+            fi
+            check_btt
+        fi
     fi
-    if [ "$STX_ROAM_OFF" = "0" ]; then
+    if [ "$STX_AUTO_ROAM" = "2" ]; then
         STX_ROAM_FULL_SCAN=$(($STX_ROAM_FULL_SCAN + 1))
         STX_ROAM_FAST_SCAN=$(($STX_ROAM_FAST_SCAN + 1))
         if [ $STX_ROAM_FULL_SCAN -ge 55 ] && [ $STX_ROAM_FAST_SCAN -ge 5 ]; then
@@ -2627,9 +2975,6 @@ check_stx()
         STX_WAN_COUNT=15
         add_network_dns
         dump_wan_stx
-        if [ "$SON_OP" = "1" ]; then
-            check_son "$STX_WAN_IF" "$STX_WAN_GW"
-        fi
     fi
     if [ "$ENX_OP" = "1" ] && [ "$ENX_STATE" = "ATTACHED" ]; then
         for enx_route in $(ip route | grep dev.*$ENX_IF | awk '{print $1}'); do
@@ -2683,7 +3028,10 @@ link_stx()
         if [ -n "$bssid" ]; then
             bssid_stx "$bssid"
             dump_stx
-            STX_LOST_BSSID=0
+            if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ -z "$WLN_STATE" ]; then
+                WLN_STATE="STARTING"
+            fi
+            STX_IFACE_DOWN=0
             STX_STATE="COMPLETED"
             return
         fi
@@ -2699,6 +3047,29 @@ link_stx()
 start_stx()
 {
     ifconfig $STX_IF 0.0.0.0 up
+    sed '/auto_roam=/d' $STX_CONF > tmpconf
+    sed '/acl_policy=/d' tmpconf > $STX_CONF
+    rm -f tmpconf
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
+        stx_acl=$(cat $STX_CONF | grep acceptlist)
+        if [ -n "$stx_acl" ]; then
+            echo "acl_policy=1" >> $STX_CONF
+        else
+            echo "acl_policy=0" >> $STX_CONF
+        fi
+        echo "auto_roam=0" >> $STX_CONF
+    else
+        if [ "$STX_ACL" != "0" ]; then
+            sed '/denylist={/,$d' $STX_CONF > tmpconf
+            mv -f tmpconf $STX_CONF
+        fi
+        if [ "$STX_ACL" != "1" ]; then
+            sed '/acceptlist={/,$d' $STX_CONF > tmpconf
+            mv -f tmpconf $STX_CONF
+        fi
+        echo "acl_policy=$STX_ACL" >> $STX_CONF
+        echo "auto_roam=$STX_AUTO_ROAM" >> $STX_CONF
+    fi
     if [ "$STX_DBG" = "3" ]; then
         $WPASUPP -i $STX_IF -B -D "nl80211" -P $STX_PID -t -f $STX_LOG -d -K -c $STX_CONF > /dev/null 2>&1
     elif [ "$STX_DBG" = "2" ]; then
@@ -2717,6 +3088,20 @@ start_stx()
 
 stop_stx()
 {
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ "$STA_OP" = "0" ]; then
+        pid=$(pgrep -f $BTTNODE)
+        if [ -n "$pid" ]; then
+            kill $pid
+        fi
+        if [ -e "$PHY_INFO" ]; then
+            rm -f $PHY_INFO
+        fi
+        if [ -e "$BTT_INFO" ]; then
+            rm -f $BTT_INFO
+        fi
+        stop_wln
+        WLN_STATE=""
+    fi
     kill_one "$STX_PID"
     if [ -e $STX_CTRL ]; then
         rm -rf $STX_CTRL
@@ -2884,8 +3269,8 @@ check_enx()
             add_enx_eth
         elif [ "$ENX_BR" = "1" ]; then
             add_enx_bri
-        elif [ "$SON_OP" = "1" ]; then
-            add_enx_son
+        elif [ "$BTT_OP" = "1" ]; then
+            add_enx_btt
         else
             check_lan
             add_enx_lan
@@ -3027,8 +3412,8 @@ link_enx()
                     del_enx_eth
                 elif [ "$ENX_BR" = "1" ]; then
                     del_enx_bri
-                elif [ "$SON_OP" = "1" ]; then
-                    del_enx_son
+                elif [ "$BTT_OP" = "1" ]; then
+                    del_enx_btt
                 else
                     del_enx_lan
                 fi
@@ -3212,8 +3597,8 @@ check_usb()
             add_usb_eth
         elif [ "$USB_BR" = "1" ]; then
             add_usb_bri
-        elif [ "$SON_OP" = "1" ]; then
-            add_usb_son
+        elif [ "$BTT_OP" = "1" ]; then
+            add_usb_btt
         else
             check_lan
             add_usb_lan
@@ -3347,8 +3732,8 @@ link_usb()
                     del_usb_eth
                 elif [ "$USB_BR" = "1" ]; then
                     del_usb_bri
-                elif [ "$SON_OP" = "1" ]; then
-                    del_usb_son
+                elif [ "$BTT_OP" = "1" ]; then
+                    del_usb_btt
                 else
                     del_usb_lan
                 fi
@@ -3761,8 +4146,8 @@ check_eth()
     if [ "$ETH_OP" = "2" ]; then
         if [ "$ETH_BR" = "1" ]; then
             add_eth_bri
-        elif [ "$SON_OP" = "1" ]; then
-            add_eth_son
+        elif [ "$BTT_OP" = "1" ]; then
+            add_eth_btt
         else
             check_lan
             add_eth_lan
@@ -3943,8 +4328,8 @@ dummy_eth()
     if [ "$ETH_OP" = "2" ]; then
         if [ "$BRI_OP" = "1" ]; then
             del_eth_bri
-        elif [ "$SON_OP" = "1" ]; then
-            del_eth_son
+        elif [ "$BTT_OP" = "1" ]; then
+            del_eth_btt
         else
             del_eth_lan
         fi
@@ -4222,7 +4607,7 @@ init_iface()
     init_wln
     init_mon
     init_lan
-    init_son
+    init_btt
 }
 
 init_monitor()
@@ -4460,11 +4845,7 @@ set_opmode()
             if [ "$SAP_WAN" = "1" ]; then
                 logger "UWIN info: SAP Mode --> Bridge"
             else
-                if [ "$LAN_SON" = "1" ]; then
-                    SON_OP=1
-                else
-                    LAN_OP=1
-                fi
+                LAN_OP=1
                 logger "UWIN info: SAP Mode --> Server"
             fi
         fi
@@ -4488,11 +4869,7 @@ set_opmode()
             fi
         elif [ "$ETH_MODE" = "2" ]; then
             ETH_OP=2
-            if [ "$LAN_SON" = "1" ]; then
-                SON_OP=1
-            else
-                LAN_OP=1
-            fi
+            LAN_OP=1
             logger "UWIN info: ETH Mode --> Server"
         elif [ "$ETH_MODE" = "1" ]; then
             ETH_OP=1
@@ -4515,11 +4892,7 @@ set_opmode()
             fi
         elif [ "$USB_MODE" = "2" ]; then
             USB_OP=2
-            if [ "$LAN_SON" = "1" ]; then
-                SON_OP=1
-            else
-                LAN_OP=1
-            fi
+            LAN_OP=1
             logger "UWIN info: USB Mode --> Server"
         elif [ "$USB_MODE" = "1" ]; then
             USB_OP=1
@@ -4542,11 +4915,7 @@ set_opmode()
             fi
         elif [ "$ENX_MODE" = "2" ]; then
             ENX_OP=2
-            if [ "$LAN_SON" = "1" ]; then
-                SON_OP=1
-            else
-                LAN_OP=1
-            fi
+            LAN_OP=1
             logger "UWIN info: ENX Mode --> Server"
         elif [ "$ENX_MODE" = "1" ]; then
             ENX_OP=1
@@ -4578,11 +4947,7 @@ set_opmode()
                     exit 0
                 fi
             else
-                if [ "$LAN_SON" = "1" ]; then
-                    SON_OP=1
-                else
-                    LAN_OP=1
-                fi
+                LAN_OP=1
                 logger "UWIN info: SAP Mode --> Server"
             fi
         fi
@@ -4599,25 +4964,21 @@ set_opmode()
                 exit 0
             fi
         else
-            if [ "$LAN_SON" = "1" ]; then
-                SON_OP=1
+            LAN_OP=1
+            logger "UWIN info: WLN Mode --> Server"
+        fi
+        if [ -n "$VAP_IF" ]; then
+            VAP_OP=1
+            if [ "$VAP_WAN" = "1" ]; then
+                if [ "$BRI_OP" = "1" ]; then
+                    logger "UWIN info: VAP Mode --> Bridge"
+                else
+                    logger "No WAN bridge found for VAP interface"
+                    exit 0
+                fi
             else
                 LAN_OP=1
-            fi
-            logger "UWIN info: WLN Mode --> Server"
-            if [ -n "$VAP_IF" ]; then
-                VAP_OP=1
-                if [ "$VAP_WAN" = "1" ]; then
-                    if [ "$BRI_OP" = "1" ]; then
-                        logger "UWIN info: VAP Mode --> Bridge"
-                    else
-                        logger "No WAN bridge found for VAP interface"
-                        exit 0
-                    fi
-                else
-                    LAN_OP=1
-                    logger "UWIN info: VAP Mode --> Server"
-                fi
+                logger "UWIN info: VAP Mode --> Server"
             fi
         fi
     fi
@@ -4639,38 +5000,27 @@ set_opmode()
                 exit 0
             fi
         else
-            if [ "$LAN_SON" = "1" ]; then
-                SON_OP=1
-            else
-                LAN_OP=1
-            fi
+            LAN_OP=1
             logger "UWIN info: WLX Mode --> Server"
         fi
     fi
-    if [ "$SON_OP" = "1" ]; then
-        if [ "$STA_OP" = "1" -a "$WLX_OP" = "1" ] || [ "$WLN_OP" = "1" -a "$STX_OP" = "1" ]; then
-            logger "UWIN info: SON auto L3 networking enabled"
-        else
-            logger "UWIN info: Cannot run SON without dual-channel Wi-Fi connections"
-            exit 0
-        fi
-    fi
-    if [ "$BTT_COUNT" = "2" -o "$BTT_COUNT" = "4" -o "$BTT_COUNT" = "8" -o "$BTT_COUNT" = "16" -o "$BTT_COUNT" = "32" ]; then
-        if [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "1" -o "$WLN_OP" = "1" ]; then
+    if [ "$BTT_COUNT" = "2" -o "$BTT_COUNT" = "4" -o "$BTT_COUNT" = "8" -o "$BTT_COUNT" = "16" ]; then
+        if [ "$LAN_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "1" -o "$WLN_OP" = "1" ]; then
+            LAN_OP=0
             BTT_OP=1
-            logger "UWIN info: BTT node ($BTT_COUNT,0) L2 chaining enabled"
         else
-            if [ "$BTT_LOCAL" != "0" ] && [ $BTT_LOCAL -le $BTT_COUNT ]; then
+            if [ "$LAN_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ $BTT_LOCAL -le $BTT_COUNT ]; then
                 if [ "$STA_OP" = "1" -a "$WLX_OP" = "1" ] || [ "$WLN_OP" = "1" -a "$STX_OP" = "1" ]; then
+                    LAN_OP=0
                     BTT_OP=1
-                    logger "UWIN info: BTT node ($BTT_COUNT,$BTT_LOCAL) L2 chaining enabled"
                 fi
             fi
         fi
         if [ "$BTT_OP" = "1" ]; then
             BTT_CHAN_BAND="20"
+            logger "UWIN info: BTT ($BTT_COUNT,$BTT_LOCAL) node chaining enabled"
         else
-            logger "UWIN info: Cannot run BTT node ($BTT_COUNT,$BTT_LOCAL) L2 chaining"
+            logger "UWIN info: Cannot run BTT ($BTT_COUNT,$BTT_LOCAL) node chaining"
             exit 0
         fi
     fi
@@ -4708,7 +5058,6 @@ clear_vars()
     WLX_OP=0
     MON_OP=0
     LAN_OP=0
-    SON_OP=0
     BTT_OP=0
     ETH_BR=0
     USB_BR=0
@@ -4750,7 +5099,7 @@ clear_conf()
     VAP_IF=""
     MON_IF=""
     LAN_IF=""
-    SON_IF=""
+    BTT_IF=""
     ATH_MOD=""
     IWL_MOD=""
     BCM_MOD=""
@@ -4783,37 +5132,30 @@ if [ "$STA_OP" = "1" ] && [ ! -e "$STA_CONF" ]; then
     logger "Cannot find configuration file $STA_CONF"
     exit 0
 fi
-if [ "$SAP_OP" = "1" ]; then
-    if [ "$SAP_WDS" = "1" ] && [ "$SAP_WAN" = "1" ] && [ ! -e "$SAP_CONF22" ]; then
-        logger "Cannot find configuration file $SAP_CONF22"
+if [ "$SAP_OP" = "1" ] && [ ! -e "$SAP_CONF" ]; then
+    logger "Cannot find configuration file $SAP_CONF"
+    exit 0
+fi
+if [ "$WLN_OP" = "1" ] && [ ! -e "$WLN_CONF" ]; then
+    logger "Cannot find configuration file $WLN_CONF"
+    exit 0
+fi
+if [ "$VAP_OP" = "1" ] && [ "$WLN_WDS" = "1" ]; then
+    if [ "$WLN_WAN" = "1" ] && [ "$VAP_WAN" = "1" ] && [ ! -e "$VAP_CONF42" ]; then
+        logger "Cannot find configuration file $VAP_CONF42"
         exit 0
-    elif [ "$SAP_WDS" = "1" ] && [ ! -e "$SAP_CONF21" ]; then
-        logger "Cannot find configuration file $SAP_CONF21"
+    elif [ "$WLN_WAN" = "1" ] && [ ! -e "$VAP_CONF41" ]; then
+        logger "Cannot find configuration file $VAP_CONF41"
         exit 0
-    elif [ "$SAP_WDS" = "0" ] && [ "$SAP_WAN" = "1" ] && [ ! -e "$SAP_CONF12" ]; then
-        logger "Cannot find configuration file $SAP_CONF12"
+    elif [ "$WLN_WAN" = "0" ] && [ "$VAP_WAN" = "1" ] && [ ! -e "$VAP_CONF32" ]; then
+        logger "Cannot find configuration file $VAP_CONF32"
         exit 0
-    elif [ ! -e "$SAP_CONF11" ]; then
-        logger "Cannot find configuration file $SAP_CONF11"
+    elif [ ! -e "$VAP_CONF31" ]; then
+        logger "Cannot find configuration file $VAP_CONF31"
         exit 0
     fi
 fi
-if [ "$WLN_OP" = "1" ]; then
-    if [ "$WLN_WDS" = "1" ] && [ "$WLN_WAN" = "1" ] && [ ! -e "$WLN_CONF22" ]; then
-        logger "Cannot find configuration file $WLN_CONF22"
-        exit 0
-    elif [ "$WLN_WDS" = "1" ] && [ ! -e "$WLN_CONF21" ]; then
-        logger "Cannot find configuration file $WLN_CONF21"
-        exit 0
-    elif [ "$WLN_WDS" = "0" ] && [ "$WLN_WAN" = "1" ] && [ ! -e "$WLN_CONF12" ]; then
-        logger "Cannot find configuration file $WLN_CONF12"
-        exit 0
-    elif [ ! -e "$WLN_CONF11" ]; then
-        logger "Cannot find configuration file $WLN_CONF11"
-        exit 0
-    fi
-fi
-if [ "$VAP_OP" = "1" ]; then
+if [ "$VAP_OP" = "1" ] && [ "$WLN_WDS" = "0" ]; then
     if [ "$WLN_WAN" = "1" ] && [ "$VAP_WAN" = "1" ] && [ ! -e "$VAP_CONF22" ]; then
         logger "Cannot find configuration file $VAP_CONF22"
         exit 0
@@ -4832,14 +5174,9 @@ if [ "$STX_OP" = "1" ] && [ ! -e "$STX_CONF" ]; then
     logger "Cannot find configuration file $STX_CONF"
     exit 0
 fi
-if [ "$WLX_OP" = "1" ]; then
-    if [ "$WLX_WAN" = "1" ] && [ ! -e "$WLX_CONF2" ]; then
-        logger "Cannot find configuration file $WLX_CONF2"
-        exit 0
-    elif [ ! -e "$WLX_CONF1" ]; then
-        logger "Cannot find configuration file $WLX_CONF1"
-        exit 0
-    fi
+if [ "$WLX_OP" = "1" ] && [ ! -e "$WLX_CONF" ]; then
+    logger "Cannot find configuration file $WLX_CONF"
+    exit 0
 fi
 if [ -n "$WIRE_ETH" ]; then
     WIRE_MAC=$(ip addr show dev $WIRE_ETH | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
