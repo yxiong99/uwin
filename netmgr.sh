@@ -1729,6 +1729,7 @@ check_sta()
     STA_IFACE_DOWN=0
     bssid=$($IWUTILS dev $STA_IF link | grep Connected | awk '{print $3}') > /dev/null 2>&1
     if [ -z "$bssid" ]; then
+        logger "STA ($STA_IF) info: BSSID not found"
         lost_sta
         return
     fi
@@ -1742,8 +1743,10 @@ check_sta()
         STA_BSSID="$bssid"
         return
     fi
-    rssi=$($IWUTILS dev $STA_IF link | grep 'signal:' | awk '{print $2}') > /dev/null 2>&1    
+    rssi=$($IWUTILS dev $STA_IF link | grep 'signal:' | awk '{print $2}') > /dev/null 2>&1
     if [ -z "$rssi" ]; then
+        logger "STA ($STA_IF) info: RSSI not found"
+        lost_sta
         return
     fi
     BTT_PHY_UPDATE=0
@@ -1791,6 +1794,8 @@ check_sta()
             $BTTNODE -l $WLX_IF -m $BTT_COUNT -n $BTT_LOCAL -p $STA_BSSID -w $STA_IF &
             if [ "$BTT_LOCAL" = "$BTT_COUNT" ]; then
                 BTT_NODE_CHAIN_COUNT=0
+                sed '/auto_roam=/d' $STA_CONF > tmpconf
+                sed '/acl_policy=/d' tmpconf > $STA_CONF
                 sed '/denylist={/,$d' $STA_CONF > tmpconf
                 sed '/acceptlist={/,$d' tmpconf > $STA_CONF
                 rm -f tmpconf
@@ -1799,7 +1804,8 @@ check_sta()
         fi
         if [ "$BTT_LOCAL" = "$BTT_COUNT" ] && [ ! -e "$BTT_INFO" ]; then
             BTT_NODE_CHAIN_COUNT=$(($BTT_NODE_CHAIN_COUNT + 1))
-            if [ $BTT_NODE_CHAIN_COUNT -gt 10 ]; then
+            logger "STA ($STA_IF) info: BTT chaining ($STA_BSSID) count $BTT_NODE_CHAIN_COUNT"
+            if [ $BTT_NODE_CHAIN_COUNT -gt 20 ]; then
                 BTT_NODE_CHAIN_COUNT=0
                 {
                     echo "denylist={"
@@ -2065,6 +2071,11 @@ link_sta()
     if [ $STA_LINK_COUNT -gt 0 ]; then
         STA_LINK_COUNT=$(($STA_LINK_COUNT - 1))
         return
+    fi
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
+        sed '/denylist={/,$d' $STA_CONF > tmpconf
+        sed '/acceptlist={/,$d' tmpconf > $STA_CONF
+        rm -f tmpconf
     fi
     stop_sta
     STA_STATE="STARTING"
@@ -2765,6 +2776,7 @@ check_stx()
     STX_IFACE_DOWN=0
     bssid=$($IWUTILS dev $STX_IF link | grep Connected | awk '{print $3}') > /dev/null 2>&1
     if [ -z "$bssid" ]; then
+        logger "STX ($STX_IF) info: BSSID not found"
         lost_stx
         return
     fi
@@ -2780,6 +2792,8 @@ check_stx()
     fi
     rssi=$($IWUTILS dev $STX_IF link | grep 'signal:' | awk '{print $2}') > /dev/null 2>&1
     if [ -z "$rssi" ]; then
+        logger "STX ($STX_IF) info: RSSI not found"
+        lost_stx
         return
     fi
     BTT_PHY_UPDATE=0
@@ -2824,6 +2838,8 @@ check_stx()
             $BTTNODE -l $WLN_IF -m $BTT_COUNT -n $BTT_LOCAL -p $STX_BSSID -w $STX_IF &
             if [ "$BTT_LOCAL" = "$BTT_COUNT" ]; then
                 BTT_NODE_CHAIN_COUNT=0
+                sed '/auto_roam=/d' $STX_CONF > tmpconf
+                sed '/acl_policy=/d' tmpconf > $STX_CONF
                 sed '/denylist={/,$d' $STX_CONF > tmpconf
                 sed '/acceptlist={/,$d' tmpconf > $STX_CONF
                 rm -f tmpconf
@@ -2832,7 +2848,8 @@ check_stx()
         fi
         if [ "$BTT_LOCAL" = "$BTT_COUNT" ] && [ ! -e "$BTT_INFO" ]; then
             BTT_NODE_CHAIN_COUNT=$(($BTT_NODE_CHAIN_COUNT + 1))
-            if [ $BTT_NODE_CHAIN_COUNT -gt 10 ]; then
+            logger "STX ($STX_IF) info: BTT chaining ($STX_BSSID) count $BTT_NODE_CHAIN_COUNT"
+            if [ $BTT_NODE_CHAIN_COUNT -gt 20 ]; then
                 BTT_NODE_CHAIN_COUNT=0
                 {
                     echo "denylist={"
@@ -3039,6 +3056,11 @@ link_stx()
     if [ $STX_LINK_COUNT -gt 0 ]; then
         STX_LINK_COUNT=$(($STX_LINK_COUNT - 1))
         return
+    fi
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ "$STA_OP" = "0" ]; then
+        sed '/denylist={/,$d' $STX_CONF > tmpconf
+        sed '/acceptlist={/,$d' tmpconf > $STX_CONF
+        rm -f tmpconf
     fi
     stop_stx
     STX_STATE="STARTING"
@@ -4651,7 +4673,7 @@ init_drv()
         fi
         sleep 1
         if [ -n "$ATH_MOD" -o -n "$IWL_MOD" ]; then
-            wiphy=$(iw phy | grep 'Wiphy' | awk '{print $2}') > /dev/null 2>&1
+            wiphy=$($IWUTILS phy | grep 'Wiphy' | awk '{print $2}') > /dev/null 2>&1
             if [ -z "$wiphy" ]; then
                 logger "Cannot find Wiphy interface"
                 return
@@ -4829,6 +4851,67 @@ clean_drv()
         if [ -n "$rtl" ]; then
             rmmod $RTL_MOD > /dev/null 2>&1
         fi
+    fi
+}
+
+check_conf()
+{
+    if [ "$STA_OP" = "1" ] && [ ! -e "$STA_CONF" ]; then
+        logger "Cannot find configuration file $STA_CONF"
+        exit 0
+    fi
+    if [ "$SAP_OP" = "1" ] && [ ! -e "$SAP_CONF" ]; then
+        logger "Cannot find configuration file $SAP_CONF"
+        exit 0
+    fi
+    if [ "$WLN_OP" = "1" ] && [ ! -e "$WLN_CONF" ]; then
+        logger "Cannot find configuration file $WLN_CONF"
+        exit 0
+    fi
+    if [ "$VAP_OP" = "1" ] && [ "$WLN_WDS" = "1" ]; then
+        if [ "$WLN_WAN" = "1" ] && [ "$VAP_WAN" = "1" ] && [ ! -e "$VAP_CONF42" ]; then
+            logger "Cannot find configuration file $VAP_CONF42"
+            exit 0
+        elif [ "$WLN_WAN" = "1" ] && [ ! -e "$VAP_CONF41" ]; then
+            logger "Cannot find configuration file $VAP_CONF41"
+            exit 0
+        elif [ "$WLN_WAN" = "0" ] && [ "$VAP_WAN" = "1" ] && [ ! -e "$VAP_CONF32" ]; then
+            logger "Cannot find configuration file $VAP_CONF32"
+            exit 0
+        elif [ ! -e "$VAP_CONF31" ]; then
+            logger "Cannot find configuration file $VAP_CONF31"
+            exit 0
+        fi
+    fi
+    if [ "$VAP_OP" = "1" ] && [ "$WLN_WDS" = "0" ]; then
+        if [ "$WLN_WAN" = "1" ] && [ "$VAP_WAN" = "1" ] && [ ! -e "$VAP_CONF22" ]; then
+            logger "Cannot find configuration file $VAP_CONF22"
+            exit 0
+        elif [ "$WLN_WAN" = "1" ] && [ ! -e "$VAP_CONF21" ]; then
+            logger "Cannot find configuration file $VAP_CONF21"
+            exit 0
+        elif [ "$WLN_WAN" = "0" ] && [ "$VAP_WAN" = "1" ] && [ ! -e "$VAP_CONF12" ]; then
+            logger "Cannot find configuration file $VAP_CONF12"
+            exit 0
+        elif [ ! -e "$VAP_CONF11" ]; then
+            logger "Cannot find configuration file $VAP_CONF11"
+            exit 0
+        fi
+    fi
+    if [ "$STX_OP" = "1" ] && [ ! -e "$STX_CONF" ]; then
+        logger "Cannot find configuration file $STX_CONF"
+        exit 0
+    fi
+    if [ "$WLX_OP" = "1" ] && [ ! -e "$WLX_CONF" ]; then
+        logger "Cannot find configuration file $WLX_CONF"
+        exit 0
+    fi
+    if [ -n "$WIRE_ETH" ]; then
+        WIRE_MAC=$(ip addr show dev $WIRE_ETH | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
+    fi
+    if [ -z "$WIRE_MAC" ]; then
+        logger "Cannot find primary wired interface $WIRE_ETH"
+        exit 0
     fi
 }
 
@@ -5042,6 +5125,7 @@ set_opmode()
         MON_USB_OP=1
         logger "UWIN info: Wi-Fi USB monitor enabled"
     fi
+    check_conf
 }
 
 clear_vars()
@@ -5119,6 +5203,7 @@ clear_conf()
 logger "\"$0\" checking..."
 
 kill_all $0
+
 clear_conf
 clear_vars
 
@@ -5128,64 +5213,6 @@ if [ ! -e "/etc/uwin.conf" ]; then
 fi
 source "/etc/uwin.conf"
 set_opmode
-
-if [ "$STA_OP" = "1" ] && [ ! -e "$STA_CONF" ]; then
-    logger "Cannot find configuration file $STA_CONF"
-    exit 0
-fi
-if [ "$SAP_OP" = "1" ] && [ ! -e "$SAP_CONF" ]; then
-    logger "Cannot find configuration file $SAP_CONF"
-    exit 0
-fi
-if [ "$WLN_OP" = "1" ] && [ ! -e "$WLN_CONF" ]; then
-    logger "Cannot find configuration file $WLN_CONF"
-    exit 0
-fi
-if [ "$VAP_OP" = "1" ] && [ "$WLN_WDS" = "1" ]; then
-    if [ "$WLN_WAN" = "1" ] && [ "$VAP_WAN" = "1" ] && [ ! -e "$VAP_CONF42" ]; then
-        logger "Cannot find configuration file $VAP_CONF42"
-        exit 0
-    elif [ "$WLN_WAN" = "1" ] && [ ! -e "$VAP_CONF41" ]; then
-        logger "Cannot find configuration file $VAP_CONF41"
-        exit 0
-    elif [ "$WLN_WAN" = "0" ] && [ "$VAP_WAN" = "1" ] && [ ! -e "$VAP_CONF32" ]; then
-        logger "Cannot find configuration file $VAP_CONF32"
-        exit 0
-    elif [ ! -e "$VAP_CONF31" ]; then
-        logger "Cannot find configuration file $VAP_CONF31"
-        exit 0
-    fi
-fi
-if [ "$VAP_OP" = "1" ] && [ "$WLN_WDS" = "0" ]; then
-    if [ "$WLN_WAN" = "1" ] && [ "$VAP_WAN" = "1" ] && [ ! -e "$VAP_CONF22" ]; then
-        logger "Cannot find configuration file $VAP_CONF22"
-        exit 0
-    elif [ "$WLN_WAN" = "1" ] && [ ! -e "$VAP_CONF21" ]; then
-        logger "Cannot find configuration file $VAP_CONF21"
-        exit 0
-    elif [ "$WLN_WAN" = "0" ] && [ "$VAP_WAN" = "1" ] && [ ! -e "$VAP_CONF12" ]; then
-        logger "Cannot find configuration file $VAP_CONF12"
-        exit 0
-    elif [ ! -e "$VAP_CONF11" ]; then
-        logger "Cannot find configuration file $VAP_CONF11"
-        exit 0
-    fi
-fi
-if [ "$STX_OP" = "1" ] && [ ! -e "$STX_CONF" ]; then
-    logger "Cannot find configuration file $STX_CONF"
-    exit 0
-fi
-if [ "$WLX_OP" = "1" ] && [ ! -e "$WLX_CONF" ]; then
-    logger "Cannot find configuration file $WLX_CONF"
-    exit 0
-fi
-if [ -n "$WIRE_ETH" ]; then
-    WIRE_MAC=$(ip addr show dev $WIRE_ETH | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
-fi
-if [ -z "$WIRE_MAC" ]; then
-    logger "Cannot find primary wired interface $WIRE_ETH"
-    exit 0
-fi
 
 logger "UWIN network manager version $UWINVER"
 

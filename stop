@@ -4,19 +4,6 @@ source "/etc/uwin.conf"
 
 restart()
 {
-    if [ -n "$USB_IF" ]; then
-        iface=$(ifconfig -a | grep $USB_IF | awk '{print $1}') > /dev/null 2>&1
-        if [ -n "$iface" ]; then
-            ifconfig $USB_IF up
-        fi
-    fi
-    if [ -n "$ENX_IF" ]; then
-        iface=$(ifconfig -a | grep $ENX_IF | awk '{print $1}') > /dev/null 2>&1
-        if [ -n "$iface" ]; then
-            ifconfig $ENX_IF up
-        fi
-    fi
-    ifconfig $WIRE_ETH up
     param=$(ls /sys/module/cfg80211/parameters | grep block_wildcard_scan)
     if [ -n "$param" ]; then
         echo 0 > /sys/module/cfg80211/parameters/block_wildcard_scan
@@ -139,15 +126,21 @@ down_if()
         iface=$(ifconfig | grep $USB_IF | awk '{print $1}') > /dev/null 2>&1
         if [ -n "$iface" ]; then
             ifconfig $USB_IF down
+            sleep 1
+            ifconfig $USB_IF up
         fi
     fi
     if [ -n "$ENX_IF" ]; then
         iface=$(ifconfig | grep $ENX_IF | awk '{print $1}') > /dev/null 2>&1
         if [ -n "$iface" ]; then
             ifconfig $ENX_IF down
+            sleep 1
+            ifconfig $ENX_IF up
         fi
     fi
     ifconfig $WIRE_ETH down
+    sleep 1
+    ifconfig $WIRE_ETH up
 }
 
 stop_ps()
