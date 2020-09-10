@@ -1804,8 +1804,10 @@ check_sta()
         fi
         if [ "$BTT_LOCAL" = "$BTT_COUNT" ] && [ ! -e "$BTT_INFO" ]; then
             BTT_NODE_CHAIN_COUNT=$(($BTT_NODE_CHAIN_COUNT + 1))
-            logger "STA ($STA_IF) info: BTT chaining ($STA_BSSID) count $BTT_NODE_CHAIN_COUNT"
-            if [ $BTT_NODE_CHAIN_COUNT -gt 20 ]; then
+            if [ $(($BTT_NODE_CHAIN_COUNT % 2)) -eq 0 ]; then
+                logger "STA ($STA_IF) info: BTT chaining ($STA_BSSID) count $BTT_NODE_CHAIN_COUNT"
+            fi
+            if [ $BTT_NODE_CHAIN_COUNT -gt 30 ]; then
                 BTT_NODE_CHAIN_COUNT=0
                 {
                     echo "denylist={"
@@ -2848,8 +2850,10 @@ check_stx()
         fi
         if [ "$BTT_LOCAL" = "$BTT_COUNT" ] && [ ! -e "$BTT_INFO" ]; then
             BTT_NODE_CHAIN_COUNT=$(($BTT_NODE_CHAIN_COUNT + 1))
-            logger "STX ($STX_IF) info: BTT chaining ($STX_BSSID) count $BTT_NODE_CHAIN_COUNT"
-            if [ $BTT_NODE_CHAIN_COUNT -gt 20 ]; then
+            if [ $(($BTT_NODE_CHAIN_COUNT % 2)) -eq 0 ]; then
+                logger "STX ($STX_IF) info: BTT chaining ($STX_BSSID) count $BTT_NODE_CHAIN_COUNT"
+            fi
+            if [ $BTT_NODE_CHAIN_COUNT -gt 30 ]; then
                 BTT_NODE_CHAIN_COUNT=0
                 {
                     echo "denylist={"
