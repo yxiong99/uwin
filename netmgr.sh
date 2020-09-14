@@ -950,11 +950,6 @@ check_wln()
         sleep 1
         return
     fi
-    wlnphy=$(cat /sys/class/net/$WLN_IF/operstate) > /dev/null 2>&1
-    if [ "$wlnphy" = "down" ]; then
-        ifconfig $WLN_IF up
-        return
-    fi
     pid=$(ps -ef | grep $WLNCONF | awk '{print $2}')
     fid=$(cat $WLN_PID)
     for pi in $pid; do
@@ -973,6 +968,12 @@ check_wln()
                 return
             fi
         fi
+        reset_wln
+        return
+    fi
+    wlnphy=$(cat /sys/class/net/$WLN_IF/operstate) > /dev/null 2>&1
+    if [ "$wlnphy" = "down" ]; then
+        logger "WLN ($WLN_IF) info: interface down"
         reset_wln
         return
     fi
@@ -2277,11 +2278,6 @@ check_wlx()
         sleep 1
         return
     fi
-    wlxphy=$(cat /sys/class/net/$WLX_IF/operstate) > /dev/null 2>&1
-    if [ "$wlxphy" = "down" ]; then
-        ifconfig $WLX_IF up
-        return
-    fi
     pid=$(ps -ef | grep $WLX_CONF | awk '{print $2}')
     fid=$(cat $WLX_PID)
     for pi in $pid; do
@@ -2300,6 +2296,12 @@ check_wlx()
                 return
             fi
         fi
+        reset_wlx
+        return
+    fi
+    wlxphy=$(cat /sys/class/net/$WLX_IF/operstate) > /dev/null 2>&1
+    if [ "$wlxphy" = "down" ]; then
+        logger "WLX ($WLX_IF) info: interface down"
         reset_wlx
         return
     fi
