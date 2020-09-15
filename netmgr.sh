@@ -936,7 +936,7 @@ reset_wln()
         fi
     fi
     stop_wln
-    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "0" ]; then
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
         WLX_STATE=""
     else
         WLN_STATE="STARTING"
@@ -2270,7 +2270,7 @@ reset_wlx()
         fi
     fi
     stop_wlx
-    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ]; then
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
         WLX_STATE=""
     else
         WLX_STATE="STARTING"
