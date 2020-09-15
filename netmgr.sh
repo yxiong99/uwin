@@ -318,7 +318,11 @@ start_btt()
     ip addr add dev $BTT_IF $btt_ip broadcast $btt_brd
     DNSMASQ_ARGS="-o -f -b -K -D -Q 2007"
     conf_btt "--dhcp-sequential-ip --dhcp-leasefile=$BTT_DHCP_LEASE"
-    conf_btt "--clear-on-reload --dhcp-option=6,8.8.8.8,8.8.4.4"
+    if [ -n "$DNSADDR" ]; then
+        conf_btt "--clear-on-reload --dhcp-option=6,8.8.8.8,$DNSADDR"
+    else
+        conf_btt "--clear-on-reload --dhcp-option=6,8.8.8.8,8.8.4.4"
+    fi
     conf_btt "-i $BTT_IF -F $BTT_IF,$btt_start,$btt_end,3600"
     $DNSMASQ $DNSMASQ_ARGS
 }
@@ -932,7 +936,11 @@ reset_wln()
         fi
     fi
     stop_wln
-    WLN_STATE="STARTING"
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "0" ]; then
+        WLX_STATE=""
+    else
+        WLN_STATE="STARTING"
+    fi
     WLN_SSID=""
     dump_wln
 }
@@ -968,6 +976,7 @@ check_wln()
                 return
             fi
         fi
+        logger "WLN ($WLN_IF) info: process killed"
         reset_wln
         return
     fi
@@ -979,6 +988,7 @@ check_wln()
     fi
     ssid=$(ssid_wln $WLN_IF)
     if [ -z "$ssid" ]; then
+        logger "WLN ($WLN_IF) info: SSID not found"
         reset_wln
         return
     fi
@@ -2260,7 +2270,11 @@ reset_wlx()
         fi
     fi
     stop_wlx
-    WLX_STATE="STARTING"
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ]; then
+        WLX_STATE=""
+    else
+        WLX_STATE="STARTING"
+    fi
     WLX_SSID=""
     dump_wlx
 }
@@ -2296,6 +2310,7 @@ check_wlx()
                 return
             fi
         fi
+        logger "WLX ($WLX_IF) info: process killed"
         reset_wlx
         return
     fi
@@ -2307,6 +2322,7 @@ check_wlx()
     fi
     ssid=$(ssid_wlx $WLX_IF)
     if [ -z "$ssid" ]; then
+        logger "WLX ($WLX_IF) info: SSID not found"
         reset_wlx
         return
     fi
