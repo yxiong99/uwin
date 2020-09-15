@@ -1633,6 +1633,26 @@ config_sta()
     fi
 }
 
+freq_sta()
+{
+    STA_CHAN=$($IWUTILS dev $STA_IF info | grep channel | awk '{print $2}') > /dev/null 2>&1
+    if [ -n "$STA_CHAN" ]; then
+        if [ $STA_CHAN -gt 30 ]; then
+            STA_FREQ=$((5000 + ($STA_CHAN * 5)))
+        else
+            STA_FREQ=$((2407 + ($STA_CHAN * 5)))
+        fi
+    else
+        STA_FREQ=$($IWUTILS dev $STA_IF link | grep freq | awk '{print $2}') > /dev/null 2>&1
+        if [ $STA_FREQ -gt 5000 ]; then
+            STA_CHAN=$((($STA_FREQ - 5000) / 5))
+        else
+            STA_CHAN=$((($STA_FREQ - 2407) / 5))
+        fi
+    fi
+    logger "STA ($STA_IF) info: \"$STA_SSID\" (bssid: $STA_BSSID freq: $STA_FREQ)"
+}
+
 bssid_sta()
 {
     STA_BSSID="$1"
@@ -1657,22 +1677,7 @@ bssid_sta()
         fi
         STA_SSID="$sta_ssid"
     fi
-    STA_CHAN=$($IWUTILS dev $STA_IF info | grep channel | awk '{print $2}') > /dev/null 2>&1
-    if [ -n "$STA_CHAN" ]; then
-        if [ $STA_CHAN -gt 30 ]; then
-            STA_FREQ=$((5000 + ($STA_CHAN * 5)))
-        else
-            STA_FREQ=$((2407 + ($STA_CHAN * 5)))
-        fi
-    else
-        STA_FREQ=$($IWUTILS dev $STA_IF link | grep freq | awk '{print $2}') > /dev/null 2>&1
-        if [ $STA_FREQ -gt 5000 ]; then
-            STA_CHAN=$((($STA_FREQ - 5000) / 5))
-        else
-            STA_CHAN=$((($STA_FREQ - 2407) / 5))
-        fi
-    fi
-    logger "STA ($STA_IF) info: \"$STA_SSID\" (bssid: $STA_BSSID freq: $STA_FREQ)"
+    freq_sta
     STA_RATE=""
     STA_RSSI=""
     STA_WAN_GW=""
@@ -1737,7 +1742,6 @@ check_sta()
         ifconfig $STA_IF up
         return
     fi
-    STA_IFACE_DOWN=0
     bssid=$($IWUTILS dev $STA_IF link | grep Connected | awk '{print $3}') > /dev/null 2>&1
     if [ -z "$bssid" ]; then
         logger "STA ($STA_IF) info: BSSID not found"
@@ -1759,6 +1763,11 @@ check_sta()
         logger "STA ($STA_IF) info: RSSI not found"
         lost_sta
         return
+    fi
+    if [ $STA_IFACE_DOWN -ne 0 ]; then
+        freq_sta
+        dump_sta
+        STA_IFACE_DOWN=0
     fi
     BTT_PHY_UPDATE=0
     if [ -z "$STA_RSSI" ]; then
@@ -2698,6 +2707,26 @@ config_stx()
     fi
 }
 
+freq_stx()
+{
+    STX_CHAN=$($IWUTILS dev $STX_IF info | grep channel | awk '{print $2}') > /dev/null 2>&1
+    if [ -n "$STX_CHAN" ]; then
+        if [ $STX_CHAN -gt 30 ]; then
+            STX_FREQ=$((5000 + ($STX_CHAN * 5)))
+        else
+            STX_FREQ=$((2407 + ($STX_CHAN * 5)))
+        fi
+    else
+        STX_FREQ=$($IWUTILS dev $STX_IF link | grep freq | awk '{print $2}') > /dev/null 2>&1
+        if [ $STX_FREQ -gt 5000 ]; then
+            STX_CHAN=$((($STX_FREQ - 5000) / 5))
+        else
+            STX_CHAN=$((($STX_FREQ - 2407) / 5))
+        fi
+    fi
+    logger "STX ($STX_IF) info: \"$STX_SSID\" (bssid: $STX_BSSID freq: $STX_FREQ)"
+}
+
 bssid_stx()
 {
     STX_BSSID="$1"
@@ -2722,22 +2751,7 @@ bssid_stx()
         fi
         STX_SSID="$stx_ssid"
     fi
-    STX_CHAN=$($IWUTILS dev $STX_IF info | grep channel | awk '{print $2}') > /dev/null 2>&1
-    if [ -n "$STX_CHAN" ]; then
-        if [ $STX_CHAN -gt 30 ]; then
-            STX_FREQ=$((5000 + ($STX_CHAN * 5)))
-        else
-            STX_FREQ=$((2407 + ($STX_CHAN * 5)))
-        fi
-    else
-        STX_FREQ=$($IWUTILS dev $STX_IF link | grep freq | awk '{print $2}') > /dev/null 2>&1
-        if [ $STX_FREQ -gt 5000 ]; then
-            STX_CHAN=$((($STX_FREQ - 5000) / 5))
-        else
-            STX_CHAN=$((($STX_FREQ - 2407) / 5))
-        fi
-    fi
-    logger "STX ($STX_IF) info: \"$STX_SSID\" (bssid: $STX_BSSID freq: $STX_FREQ)"
+    freq_stx
     STX_RATE=""
     STX_RSSI=""
     STX_WAN_GW=""
@@ -2793,7 +2807,6 @@ check_stx()
         ifconfig $STX_IF up
         return
     fi
-    STX_IFACE_DOWN=0
     bssid=$($IWUTILS dev $STX_IF link | grep Connected | awk '{print $3}') > /dev/null 2>&1
     if [ -z "$bssid" ]; then
         logger "STX ($STX_IF) info: BSSID not found"
@@ -2815,6 +2828,11 @@ check_stx()
         logger "STX ($STX_IF) info: RSSI not found"
         lost_stx
         return
+    fi
+    if [ $STX_IFACE_DOWN -ne 0 ]; then
+        freq_stx
+        dump_stx
+        STX_IFACE_DOWN=0
     fi
     BTT_PHY_UPDATE=0
     if [ -z "$STX_RSSI" ]; then
