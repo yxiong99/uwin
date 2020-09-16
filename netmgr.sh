@@ -25,7 +25,7 @@ kill_one()
     local f
     local pid
     f=$1
-    if [ -e $f ]; then
+    if [ -e "$f" ]; then
         pid=$(cat $f)
         if [ -n "$pid" ]; then
             kill -9 $pid > /dev/null 2>&1
@@ -923,6 +923,7 @@ ssid_wln()
 
 reset_wln()
 {
+    logger "WLN ($WLN_IF) info: reset AP (bssid: $WLN_MAC)"
     if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "0" ]; then
         pid=$(pgrep -f $BTTNODE)
         if [ -n "$pid" ]; then
@@ -1149,7 +1150,11 @@ start_wln()
 
 stop_wln()
 {
-    kill_one "$WLN_PID"
+    if [ -e "$WLN_PID" ]; then
+        kill_one $WLN_PID
+    else
+        kill_all $HOSTAPD
+    fi
     if [ -e $WLN_CTRL ]; then
         rm -rf $WLN_CTRL
     fi
@@ -1380,7 +1385,7 @@ start_sap()
 
 stop_sap()
 {
-    kill_one "$SAP_PID"
+    kill_one $SAP_PID
     if [ -e $SAP_CTRL ]; then
         rm -rf $SAP_CTRL
     fi
@@ -1569,12 +1574,12 @@ clean_sta()
         if [ -z "$brif" ]; then
             return
         fi
-        kill_one "$BRI_DHCP_PID"
+        kill_one $BRI_DHCP_PID
         if [ -e "$BRI_DHCP_LEASE" ]; then
             rm -f $BRI_DHCP_LEASE
         fi
     else
-        kill_one "$STA_DHCP_PID"
+        kill_one $STA_DHCP_PID
         if [ -e $STA_DHCP_LEASE ]; then
             rm -f $STA_DHCP_LEASE
         fi
@@ -2173,11 +2178,11 @@ stop_sta()
         stop_wlx
         WLX_STATE=""
     fi
-    kill_one "$STA_PID"
+    kill_one $STA_PID
     if [ -e $STA_CTRL ]; then
         rm -rf $STA_CTRL
     fi
-    kill_one "$STA_DHCP_PID"
+    kill_one $STA_DHCP_PID
     if [ -e $STA_DHCP_LEASE ]; then
         rm -f $STA_DHCP_LEASE
     fi
@@ -2266,6 +2271,7 @@ ssid_wlx()
 
 reset_wlx()
 {
+    logger "WLX ($WLX_IF) info: reset AP (bssid: $WLX_MAC)"
     if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ]; then
         pid=$(pgrep -f $BTTNODE)
         if [ -n "$pid" ]; then
@@ -2484,7 +2490,11 @@ start_wlx()
 
 stop_wlx()
 {
-    kill_one "$WLX_PID"
+    if [ -e "$WLX_PID" ]; then
+        kill_one $WLX_PID
+    else
+        kill_all $HOSTAPD
+    fi
     if [ -e $WLX_CTRL ]; then
         rm -rf $WLX_CTRL
     fi
@@ -2660,7 +2670,7 @@ clean_stx()
     if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ -e "$BTT_DHCP_LEASE" ]; then
         stop_btt
     fi
-    kill_one "$STX_DHCP_PID"
+    kill_one $STX_DHCP_PID
     if [ -e $STX_DHCP_LEASE ]; then
         rm -f $STX_DHCP_LEASE
     fi
@@ -3164,11 +3174,11 @@ stop_stx()
         stop_wln
         WLN_STATE=""
     fi
-    kill_one "$STX_PID"
+    kill_one $STX_PID
     if [ -e $STX_CTRL ]; then
         rm -rf $STX_CTRL
     fi
-    kill_one "$STX_DHCP_PID"
+    kill_one $STX_DHCP_PID
     if [ -e $STX_DHCP_LEASE ]; then
         rm -f $STX_DHCP_LEASE
     fi
@@ -3281,7 +3291,7 @@ ping_enx()
 
 clean_enx()
 {
-    kill_one "$ENX_DHCP_PID"
+    kill_one $ENX_DHCP_PID
     if [ -e "$ENX_DHCP_LEASE" ]; then
         rm -f $ENX_DHCP_LEASE
     fi
@@ -3504,7 +3514,7 @@ start_enx()
 
 stop_enx()
 {
-    kill_one "$ENX_DHCP_PID"
+    kill_one $ENX_DHCP_PID
     if [ -e "$ENX_DHCP_LEASE" ]; then
         rm -f $ENX_DHCP_LEASE
     fi
@@ -3609,7 +3619,7 @@ ping_usb()
 
 clean_usb()
 {
-    kill_one "$USB_DHCP_PID"
+    kill_one $USB_DHCP_PID
     if [ -e "$USB_DHCP_LEASE" ]; then
         rm -f $USB_DHCP_LEASE
     fi
@@ -3824,7 +3834,7 @@ start_usb()
 
 stop_usb()
 {
-    kill_one "$USB_DHCP_PID"
+    kill_one $USB_DHCP_PID
     if [ -e "$USB_DHCP_LEASE" ]; then
         rm -f $USB_DHCP_LEASE
     fi
@@ -4134,12 +4144,12 @@ clean_eth()
         if [ -z "$brif" ]; then
             return
         fi
-        kill_one "$BRI_DHCP_PID"
+        kill_one $BRI_DHCP_PID
         if [ -e "$BRI_DHCP_LEASE" ]; then
             rm -f $BRI_DHCP_LEASE
         fi
     else
-        kill_one "$ETH_DHCP_PID"
+        kill_one $ETH_DHCP_PID
         if [ -e "$ETH_DHCP_LEASE" ]; then
             rm -f $ETH_DHCP_LEASE
         fi
@@ -4476,7 +4486,7 @@ stop_eth()
             brctl delbr $b > /dev/null 2>&1
         fi
     done
-    kill_one "$ETH_DHCP_PID"
+    kill_one $ETH_DHCP_PID
     if [ -e "$ETH_DHCP_LEASE" ]; then
         rm -f $ETH_DHCP_LEASE
     fi
@@ -4606,7 +4616,7 @@ add_eth_bri()
 
 stop_bri()
 {
-    kill_one "$BRI_DHCP_PID"
+    kill_one $BRI_DHCP_PID
     if [ -e "$BRI_DHCP_LEASE" ]; then
         rm -f $BRI_DHCP_LEASE
     fi
@@ -4772,6 +4782,10 @@ clean_wifi()
         kill_all "wpa_supplicant"
     fi
     pid=$(pgrep -f webalive)
+    if [ -n "$pid" ]; then
+        kill $pid
+    fi
+    pid=$(pgrep -f $BTTNODE)
     if [ -n "$pid" ]; then
         kill $pid
     fi
