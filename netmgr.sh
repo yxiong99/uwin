@@ -1150,11 +1150,7 @@ start_wln()
 
 stop_wln()
 {
-    if [ -e "$WLN_PID" ]; then
-        kill_one $WLN_PID
-    else
-        kill_all $HOSTAPD
-    fi
+    kill_all $HOSTAPD
     if [ -e $WLN_CTRL ]; then
         rm -rf $WLN_CTRL
     fi
@@ -1754,7 +1750,19 @@ check_sta()
         return
     fi
     if [ "$bssid" != "$STA_BSSID" ]; then
-        if [ "$STA_ACL" = "0" ] || [ "$STA_ACL" = "1" ] || [ "$BTT_OP" = "1" -a "$BTT_LOCAL" != "0" ]; then
+        reconn=0
+        sta_acl=$(cat $STA_CONF | grep denylist)
+        if [ -n "$sta_acl" -a "$STA_ACL" = "0" ]; then
+            reconn=1
+        fi
+        sta_acl=$(cat $STA_CONF | grep acceptlist)
+        if [ -n "$sta_acl" -a "$STA_ACL" = "1" ]; then
+            reconn=1
+        fi
+        if [ "$BTT_OP" = "1" -a "$BTT_LOCAL" != "0" ]; then
+            reconn=1
+        fi
+        if [ "$reconn" = "1" ]; then
             logger "STA ($STA_IF) info: reconnect forced"
             lost_sta
             return
@@ -2490,11 +2498,7 @@ start_wlx()
 
 stop_wlx()
 {
-    if [ -e "$WLX_PID" ]; then
-        kill_one $WLX_PID
-    else
-        kill_all $HOSTAPD
-    fi
+    kill_all $HOSTAPD
     if [ -e $WLX_CTRL ]; then
         rm -rf $WLX_CTRL
     fi
@@ -2824,7 +2828,19 @@ check_stx()
         return
     fi
     if [ "$bssid" != "$STX_BSSID" ]; then
-        if [ "$STX_ACL" = "0" ] || [ "$STX_ACL" = "1" ] || [ "$BTT_OP" = "1" -a "$BTT_LOCAL" != "0" ]; then
+        reconn=0
+        stx_acl=$(cat $STX_CONF | grep denylist)
+        if [ -n "$stx_acl" -a "$STX_ACL" = "0" ]; then
+            reconn=1
+        fi
+        stx_acl=$(cat $STX_CONF | grep acceptlist)
+        if [ -n "$stx_acl" -a "$STX_ACL" = "1" ]; then
+            reconn=1
+        fi
+        if [ "$BTT_OP" = "1" -a "$BTT_LOCAL" != "0" ]; then
+            reconn=1
+        fi
+        if [ "$reconn" = "1" ]; then
             logger "STX ($STX_IF) info: reconnect forced"
             lost_stx
             return
