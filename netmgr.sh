@@ -990,6 +990,14 @@ check_wln()
     ssid=$(ssid_wln $WLN_IF)
     if [ -z "$ssid" ]; then
         logger "WLN ($WLN_IF) info: SSID not found"
+        if [ -n "$ATH_MOD" ]; then
+            ath=$(lsmod | grep $ATH_MOD | head -n1 | awk '{print $1}')
+            if [ -n "$ath" ]; then
+                rmmod $ATH_MOD > /dev/null 2>&1
+            fi
+            modprobe $ATH_MOD > /dev/null 2>&1
+            sleep 1
+        fi
         reset_wln
         return
     fi
@@ -1150,7 +1158,7 @@ start_wln()
 
 stop_wln()
 {
-    kill_all $HOSTAPD
+    kill_one $WLN_PID
     if [ -e $WLN_CTRL ]; then
         rm -rf $WLN_CTRL
     fi
@@ -2346,6 +2354,14 @@ check_wlx()
     ssid=$(ssid_wlx $WLX_IF)
     if [ -z "$ssid" ]; then
         logger "WLX ($WLX_IF) info: SSID not found"
+        if [ -n "$RTL_MOD" ]; then
+            rtl=$(lsmod | grep $RTL_MOD | head -n1 | awk '{print $1}')
+            if [ -n "$rtl" ]; then
+                rmmod $RTL_MOD > /dev/null 2>&1
+            fi
+            modprobe $RTL_MOD > /dev/null 2>&1
+            sleep 1
+        fi
         reset_wlx
         return
     fi
@@ -2498,7 +2514,7 @@ start_wlx()
 
 stop_wlx()
 {
-    kill_all $HOSTAPD
+    kill_one $WLX_PID
     if [ -e $WLX_CTRL ]; then
         rm -rf $WLX_CTRL
     fi
