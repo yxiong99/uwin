@@ -214,12 +214,10 @@ del_enx_btt()
 
 add_enx_btt()
 {
-    if [ -n "$BTT_WAN_IF" ] && [ -n "$BTT_WAN_GW" ]; then
-        brif=$(brctl show $BTT_IF | grep $ENX_IF) > /dev/null 2>&1
-        if [ -z "$brif" ]; then
-            brctl addif $BTT_IF $ENX_IF
-            logger "LAN ($ENX_IF) info: interface added to $BTT_IF"
-        fi
+    brif=$(brctl show $BTT_IF | grep $ENX_IF) > /dev/null 2>&1
+    if [ -z "$brif" ]; then
+        brctl addif $BTT_IF $ENX_IF
+        logger "LAN ($ENX_IF) info: interface added to $BTT_IF"
     fi
 }
 
@@ -236,12 +234,10 @@ del_usb_btt()
 
 add_usb_btt()
 {
-    if [ -n "$BTT_WAN_IF" ] && [ -n "$BTT_WAN_GW" ]; then
-        brif=$(brctl show $BTT_IF | grep $USB_IF) > /dev/null 2>&1
-        if [ -z "$brif" ]; then
-            brctl addif $BTT_IF $USB_IF
-            logger "LAN ($USB_IF) info: interface added to $BTT_IF"
-        fi
+    brif=$(brctl show $BTT_IF | grep $USB_IF) > /dev/null 2>&1
+    if [ -z "$brif" ]; then
+        brctl addif $BTT_IF $USB_IF
+        logger "LAN ($USB_IF) info: interface added to $BTT_IF"
     fi
 }
 
@@ -258,12 +254,10 @@ del_eth_btt()
 
 add_eth_btt()
 {
-    if [ -n "$BTT_WAN_IF" ] && [ -n "$BTT_WAN_GW" ]; then
-        brif=$(brctl show $BTT_IF | grep $ETH_IF) > /dev/null 2>&1
-        if [ -z "$brif" ]; then
-            brctl addif $BTT_IF $ETH_IF
-            logger "LAN ($ETH_IF) info: interface added to $BTT_IF"
-        fi
+    brif=$(brctl show $BTT_IF | grep $ETH_IF) > /dev/null 2>&1
+    if [ -z "$brif" ]; then
+        brctl addif $BTT_IF $ETH_IF
+        logger "LAN ($ETH_IF) info: interface added to $BTT_IF"
     fi    
 }
 
@@ -648,11 +642,11 @@ init_btt()
     fi
     stop_btt
     if [ "$BTT_OP" = "1" ]; then
-        mac2=$(echo $ETH_MAC | cut -d ':' -f2)
-        mac3=$(echo $ETH_MAC | cut -d ':' -f3)
-        mac4=$(echo $ETH_MAC | cut -d ':' -f4)
-        mac5=$(echo $ETH_MAC | cut -d ':' -f5)
-        mac6=$(echo $ETH_MAC | cut -d ':' -f6)
+        mac2=$(echo $WIRE_MAC | cut -d ':' -f2)
+        mac3=$(echo $WIRE_MAC | cut -d ':' -f3)
+        mac4=$(echo $WIRE_MAC | cut -d ':' -f4)
+        mac5=$(echo $WIRE_MAC | cut -d ':' -f5)
+        mac6=$(echo $WIRE_MAC | cut -d ':' -f6)
         mac="ee:$mac2:$mac3:$mac4:$mac5:$mac6"
         if [ "$BTT_MAC" != "$mac" ]; then
             if [ -n "$BTT_MAC" ]; then
@@ -817,11 +811,11 @@ init_lan()
     fi
     stop_lan
     if [ "$LAN_OP" = "1" ]; then
-        mac2=$(echo $ETH_MAC | cut -d ':' -f2)
-        mac3=$(echo $ETH_MAC | cut -d ':' -f3)
-        mac4=$(echo $ETH_MAC | cut -d ':' -f4)
-        mac5=$(echo $ETH_MAC | cut -d ':' -f5)
-        mac6=$(echo $ETH_MAC | cut -d ':' -f6)
+        mac2=$(echo $WIRE_MAC | cut -d ':' -f2)
+        mac3=$(echo $WIRE_MAC | cut -d ':' -f3)
+        mac4=$(echo $WIRE_MAC | cut -d ':' -f4)
+        mac5=$(echo $WIRE_MAC | cut -d ':' -f5)
+        mac6=$(echo $WIRE_MAC | cut -d ':' -f6)
         mac="fe:$mac2:$mac3:$mac4:$mac5:$mac6"
         if [ "$LAN_MAC" != "$mac" ]; then
             if [ -n "$LAN_MAC" ]; then
@@ -1187,7 +1181,7 @@ init_wln()
         WLN_IF=""
         return
     fi
-    if [ "$WLN_OP" = "1" ] && [ "$BTT_OP" != "1" -o "$BTT_LOCAL" = "0" ]; then
+    if [ "$WLN_OP" = "1" ] && [ "$BTT_OP" = "0" -o "$BTT_LOCAL" = "0" ]; then
         WLN_STATE="STARTING"
     fi
 }
@@ -1415,13 +1409,13 @@ init_sap()
         SAP_MAC=$(ip addr show dev $SAP_IF | grep 'link/' | awk '{print $2}')
     fi
     stop_sap
-    if [ "$SAP_OP" = "1" ] && [ -n "$STA_MAC" ]; then
-        mac2=$(echo $STA_MAC | cut -d ':' -f2)
-        mac3=$(echo $STA_MAC | cut -d ':' -f3)
-        mac4=$(echo $STA_MAC | cut -d ':' -f4)
-        mac5=$(echo $STA_MAC | cut -d ':' -f5)
-        mac6=$(echo $STA_MAC | cut -d ':' -f6)
-        mac="fe:$mac2:$mac3:$mac4:$mac5:$mac6"
+    if [ "$SAP_OP" = "1" ]; then
+        mac2=$(echo $WIRE_MAC | cut -d ':' -f2)
+        mac3=$(echo $WIRE_MAC | cut -d ':' -f3)
+        mac4=$(echo $WIRE_MAC | cut -d ':' -f4)
+        mac5=$(echo $WIRE_MAC | cut -d ':' -f5)
+        mac6=$(echo $WIRE_MAC | cut -d ':' -f6)
+        mac="de:$mac2:$mac3:$mac4:$mac5:$mac6"
         SAP_MAC="$mac"
         $IWUTILS dev $STA_IF interface add $SAP_IF type managed > /dev/null 2>&1
         ip link set dev $SAP_IF address $SAP_MAC
@@ -2543,7 +2537,7 @@ init_wlx()
         WLX_IF=""
         return
     fi
-    if [ "$WLX_OP" = "1" ] && [ "$BTT_OP" != "1" -o "$BTT_LOCAL" = "0" ]; then
+    if [ "$WLX_OP" = "1" ] && [ "$BTT_OP" = "0" -o "$BTT_LOCAL" = "0" ]; then
         WLX_STATE="STARTING"
     fi
 }
@@ -3910,73 +3904,13 @@ del_vap_eth()
     fi
 }
 
-add_vap_eth()
-{
-    if [ -n "$VAP_BRV_IF" ] && [ -n "$VAP_IF" ]; then
-        brif=$(brctl show $VAP_BRV_IF | grep $VAP_IF) > /dev/null 2>&1
-        if [ -z "$brif" ]; then
-            brctl addif $VAP_BRV_IF $VAP_IF
-        fi
-    fi
-}
-
-vlan_vap_eth()
-{
-    if [ "$VAP_OP" = "1" ] && [ "$VAP_VLAN" = "1" ]; then
-        VAP_VLAN_IF="$ETH_IF.$VAP_VLAN_ID"
-        ip link add link $ETH_IF $VAP_VLAN_IF type vlan id $VAP_VLAN_ID
-        eif=$(ip link show | grep $VAP_VLAN_IF | awk '{print $2}' | cut -d '@' -f1) > /dev/null 2>&1
-        if [ -z "$eif" ]; then
-            logger "Cannot create a tagged interface on $ETH_IF for $VAP_IF"
-            return
-        fi
-        VAP_BRV_IF="brv$VAP_VLAN_ID"
-        brctl addbr $VAP_BRV_IF > /dev/null 2>&1
-        VAP_BRV_MAC="8e:$mac2:$mac3:$mac4:$mac5:$mac6"
-        ip link set dev $VAP_BRV_IF address $VAP_BRV_MAC > /dev/null 2>&1
-        ifconfig $VAP_BRV_IF 0.0.0.0 up
-        brctl addif $VAP_BRV_IF $VAP_VLAN_IF > /dev/null 2>&1
-        ifconfig $VAP_VLAN_IF 0.0.0.0 up
-    fi
-}
-
 del_wln_eth()
-{
-    if [ -n "$BRV_IF" ] && [ -n "$WLN_IF" ]; then
-        brif=$(brctl show $BRV_IF | grep $WLN_IF) > /dev/null 2>&1
-        if [ -n "$brif" ]; then
-            brctl delif $BRV_IF $WLN_IF
-        fi
-    fi
-}
-
-add_wln_eth()
 {
     if [ -n "$WLN_BRV_IF" ] && [ -n "$WLN_IF" ]; then
         brif=$(brctl show $WLN_BRV_IF | grep $WLN_IF) > /dev/null 2>&1
-        if [ -z "$brif" ]; then
-            brctl addif $WLN_BRV_IF $WLN_IF
+        if [ -n "$brif" ]; then
+            brctl delif $WLN_BRV_IF $WLN_IF
         fi
-    fi
-}
-
-vlan_wln_eth()
-{
-    if [ "$WLN_OP" = "1" ] && [ "$WLN_VLAN" = "1" ]; then
-        WLN_VLAN_IF="$ETH_IF.$WLN_VLAN_ID"
-        ip link add link $ETH_IF $WLN_VLAN_IF type vlan id $WLN_VLAN_ID
-        eif=$(ip link show | grep $WLN_VLAN_IF | awk '{print $2}' | cut -d '@' -f1) > /dev/null 2>&1
-        if [ -z "$eif" ]; then
-            logger "Cannot create a tagged interface on $ETH_IF for $WLN_IF"
-            return
-        fi
-        WLN_BRV_IF="brv$WLN_VLAN_ID"
-        brctl addbr $WLN_BRV_IF > /dev/null 2>&1
-        WLN_BRV_MAC="8a:$mac2:$mac3:$mac4:$mac5:$mac6"
-        ip link set dev $WLN_BRV_IF address $WLN_BRV_MAC > /dev/null 2>&1
-        ifconfig $WLN_BRV_IF 0.0.0.0 up
-        brctl addif $WLN_BRV_IF $WLN_VLAN_IF > /dev/null 2>&1
-        ifconfig $WLN_VLAN_IF 0.0.0.0 up
     fi
 }
 
@@ -3987,36 +3921,6 @@ del_sap_eth()
         if [ -n "$brif" ]; then
             brctl delif $SAP_BRV_IF $SAP_IF
         fi
-    fi
-}
-
-add_sap_eth()
-{
-    if [ -n "$SAP_BRV_IF" ] && [ -n "$SAP_IF" ]; then
-        brif=$(brctl show $SAP_BRV_IF | grep $SAP_IF) > /dev/null 2>&1
-        if [ -z "$brif" ]; then
-            brctl addif $SAP_BRV_IF $SAP_IF
-        fi
-    fi
-}
-
-vlan_sap_eth()
-{
-    if [ "$SAP_OP" = "1" ] && [ "$SAP_VLAN" = "1" ]; then
-        SAP_VLAN_IF="$ETH_IF.$SAP_VLAN_ID"
-        ip link add link $ETH_IF $SAP_VLAN_IF type vlan id $SAP_VLAN_ID
-        eif=$(ip link show | grep $SAP_VLAN_IF | awk '{print $2}' | cut -d '@' -f1) > /dev/null 2>&1
-        if [ -z "$eif" ]; then
-            logger "Cannot create a tagged interface on $ETH_IF for $SAP_IF"
-            return
-        fi
-        SAP_BRV_IF="brv$SAP_VLAN_ID"
-        brctl addbr $SAP_BRV_IF > /dev/null 2>&1
-        SAP_BRV_MAC="86:$mac2:$mac3:$mac4:$mac5:$mac6"
-        ip link set dev $SAP_BRV_IF address $SAP_BRV_MAC > /dev/null 2>&1
-        ifconfig $SAP_BRV_IF 0.0.0.0 up
-        brctl addif $SAP_BRV_IF $SAP_VLAN_IF > /dev/null 2>&1
-        ifconfig $SAP_VLAN_IF 0.0.0.0 up
     fi
 }
 
@@ -4040,26 +3944,6 @@ add_enx_eth()
     fi
 }
 
-vlan_enx_eth()
-{
-    if [ "$ENX_OP" = "2" ] && [ "$ENX_VLAN" = "1" ]; then
-        ENX_VLAN_IF="$ETH_IF.$ENX_VLAN_ID"
-        ip link add link $ETH_IF $ENX_VLAN_IF type vlan id $ENX_VLAN_ID
-        eif=$(ip link show | grep $ENX_VLAN_IF | awk '{print $2}' | cut -d '@' -f1) > /dev/null 2>&1
-        if [ -z "$eif" ]; then
-            logger "Cannot create a tagged interface on $ETH_IF for $ENX_IF"
-            return
-        fi
-        ENX_BRV_IF="brv$ENX_VLAN_ID"
-        brctl addbr $ENX_BRV_IF > /dev/null 2>&1
-        ENX_BRV_MAC="62:$mac2:$mac3:$mac4:$mac5:$mac6"
-        ip link set dev $ENX_BRV_IF address $ENX_BRV_MAC > /dev/null 2>&1
-        ifconfig $ENX_BRV_IF 0.0.0.0 up
-        brctl addif $ENX_BRV_IF $ENX_VLAN_IF > /dev/null 2>&1
-        ifconfig $ENX_VLAN_IF 0.0.0.0 up
-    fi
-}
-
 del_usb_eth()
 {
     if [ -n "$USB_BRV_IF" ] && [ -n "$USB_IF" ]; then
@@ -4077,26 +3961,6 @@ add_usb_eth()
         if [ -z "$brif" ]; then
             brctl addif $USB_BRV_IF $USB_IF
         fi
-    fi
-}
-
-vlan_usb_eth()
-{
-    if [ "$USB_OP" = "2" ] && [ "$USB_VLAN" = "1" ]; then
-        USB_VLAN_IF="$ETH_IF.$USB_VLAN_ID"
-        ip link add link $ETH_IF $USB_VLAN_IF type vlan id $USB_VLAN_ID
-        eif=$(ip link show | grep $USB_VLAN_IF | awk '{print $2}' | cut -d '@' -f1) > /dev/null 2>&1
-        if [ -z "$eif" ]; then
-            logger "Cannot create a tagged interface on $ETH_IF for $USB_IF"
-            return
-        fi
-        USB_BRV_IF="brv$USB_VLAN_ID"
-        brctl addbr $USB_BRV_IF > /dev/null 2>&1
-        USB_BRV_MAC="82:$mac2:$mac3:$mac4:$mac5:$mac6"
-        ip link set dev $USB_BRV_IF address $USB_BRV_MAC > /dev/null 2>&1
-        ifconfig $USB_BRV_IF 0.0.0.0 up
-        brctl addif $USB_BRV_IF $USB_VLAN_IF > /dev/null 2>&1
-        ifconfig $USB_VLAN_IF 0.0.0.0 up
     fi
 }
 
@@ -4430,7 +4294,7 @@ check_eth()
 dummy_eth()
 {
     if [ "$ETH_OP" = "2" ]; then
-        if [ "$BRI_OP" = "1" ]; then
+        if [ "$ETH_BR" = "1" ]; then
             del_eth_bri
         elif [ "$BTT_OP" = "1" ]; then
             del_eth_btt
@@ -4526,6 +4390,109 @@ stop_eth()
         del_default_route $ETH_IF
         del_route $ETH_IF
         del_addr $ETH_IF
+        del_eth_bri
+        del_eth_btt
+        del_eth_lan
+    fi
+}
+
+vlan_vap_eth()
+{
+    if [ "$VAP_OP" = "1" ] && [ "$VAP_VLAN" = "1" ]; then
+        VAP_VLAN_IF="$ETH_IF.$VAP_VLAN_ID"
+        ip link add link $ETH_IF $VAP_VLAN_IF type vlan id $VAP_VLAN_ID
+        eif=$(ip link show | grep $VAP_VLAN_IF | awk '{print $2}' | cut -d '@' -f1) > /dev/null 2>&1
+        if [ -z "$eif" ]; then
+            logger "Cannot create a tagged interface on $ETH_IF for $VAP_IF"
+            return
+        fi
+        VAP_BRV_IF="brv$VAP_VLAN_ID"
+        brctl addbr $VAP_BRV_IF > /dev/null 2>&1
+        VAP_BRV_MAC="8e:$mac2:$mac3:$mac4:$mac5:$mac6"
+        ip link set dev $VAP_BRV_IF address $VAP_BRV_MAC > /dev/null 2>&1
+        ifconfig $VAP_BRV_IF 0.0.0.0 up
+        brctl addif $VAP_BRV_IF $VAP_VLAN_IF > /dev/null 2>&1
+        ifconfig $VAP_VLAN_IF 0.0.0.0 up
+    fi
+}
+
+vlan_wln_eth()
+{
+    if [ "$WLN_OP" = "1" ] && [ "$WLN_VLAN" = "1" ]; then
+        WLN_VLAN_IF="$ETH_IF.$WLN_VLAN_ID"
+        ip link add link $ETH_IF $WLN_VLAN_IF type vlan id $WLN_VLAN_ID
+        eif=$(ip link show | grep $WLN_VLAN_IF | awk '{print $2}' | cut -d '@' -f1) > /dev/null 2>&1
+        if [ -z "$eif" ]; then
+            logger "Cannot create a tagged interface on $ETH_IF for $WLN_IF"
+            return
+        fi
+        WLN_BRV_IF="brv$WLN_VLAN_ID"
+        brctl addbr $WLN_BRV_IF > /dev/null 2>&1
+        WLN_BRV_MAC="8a:$mac2:$mac3:$mac4:$mac5:$mac6"
+        ip link set dev $WLN_BRV_IF address $WLN_BRV_MAC > /dev/null 2>&1
+        ifconfig $WLN_BRV_IF 0.0.0.0 up
+        brctl addif $WLN_BRV_IF $WLN_VLAN_IF > /dev/null 2>&1
+        ifconfig $WLN_VLAN_IF 0.0.0.0 up
+    fi
+}
+
+vlan_sap_eth()
+{
+    if [ "$SAP_OP" = "1" ] && [ "$SAP_VLAN" = "1" ]; then
+        SAP_VLAN_IF="$ETH_IF.$SAP_VLAN_ID"
+        ip link add link $ETH_IF $SAP_VLAN_IF type vlan id $SAP_VLAN_ID
+        eif=$(ip link show | grep $SAP_VLAN_IF | awk '{print $2}' | cut -d '@' -f1) > /dev/null 2>&1
+        if [ -z "$eif" ]; then
+            logger "Cannot create a tagged interface on $ETH_IF for $SAP_IF"
+            return
+        fi
+        SAP_BRV_IF="brv$SAP_VLAN_ID"
+        brctl addbr $SAP_BRV_IF > /dev/null 2>&1
+        SAP_BRV_MAC="86:$mac2:$mac3:$mac4:$mac5:$mac6"
+        ip link set dev $SAP_BRV_IF address $SAP_BRV_MAC > /dev/null 2>&1
+        ifconfig $SAP_BRV_IF 0.0.0.0 up
+        brctl addif $SAP_BRV_IF $SAP_VLAN_IF > /dev/null 2>&1
+        ifconfig $SAP_VLAN_IF 0.0.0.0 up
+    fi
+}
+
+vlan_enx_eth()
+{
+    if [ "$ENX_OP" = "2" ] && [ "$ENX_VLAN" = "1" ]; then
+        ENX_VLAN_IF="$ETH_IF.$ENX_VLAN_ID"
+        ip link add link $ETH_IF $ENX_VLAN_IF type vlan id $ENX_VLAN_ID
+        eif=$(ip link show | grep $ENX_VLAN_IF | awk '{print $2}' | cut -d '@' -f1) > /dev/null 2>&1
+        if [ -z "$eif" ]; then
+            logger "Cannot create a tagged interface on $ETH_IF for $ENX_IF"
+            return
+        fi
+        ENX_BRV_IF="brv$ENX_VLAN_ID"
+        brctl addbr $ENX_BRV_IF > /dev/null 2>&1
+        ENX_BRV_MAC="84:$mac2:$mac3:$mac4:$mac5:$mac6"
+        ip link set dev $ENX_BRV_IF address $ENX_BRV_MAC > /dev/null 2>&1
+        ifconfig $ENX_BRV_IF 0.0.0.0 up
+        brctl addif $ENX_BRV_IF $ENX_VLAN_IF > /dev/null 2>&1
+        ifconfig $ENX_VLAN_IF 0.0.0.0 up
+    fi
+}
+
+vlan_usb_eth()
+{
+    if [ "$USB_OP" = "2" ] && [ "$USB_VLAN" = "1" ]; then
+        USB_VLAN_IF="$ETH_IF.$USB_VLAN_ID"
+        ip link add link $ETH_IF $USB_VLAN_IF type vlan id $USB_VLAN_ID
+        eif=$(ip link show | grep $USB_VLAN_IF | awk '{print $2}' | cut -d '@' -f1) > /dev/null 2>&1
+        if [ -z "$eif" ]; then
+            logger "Cannot create a tagged interface on $ETH_IF for $USB_IF"
+            return
+        fi
+        USB_BRV_IF="brv$USB_VLAN_ID"
+        brctl addbr $USB_BRV_IF > /dev/null 2>&1
+        USB_BRV_MAC="82:$mac2:$mac3:$mac4:$mac5:$mac6"
+        ip link set dev $USB_BRV_IF address $USB_BRV_MAC > /dev/null 2>&1
+        ifconfig $USB_BRV_IF 0.0.0.0 up
+        brctl addif $USB_BRV_IF $USB_VLAN_IF > /dev/null 2>&1
+        ifconfig $USB_VLAN_IF 0.0.0.0 up
     fi
 }
 
@@ -4817,10 +4784,6 @@ clean_wifi()
     if [ -n "$pid" ]; then
         kill $pid
     fi
-    pid=$(pgrep -f $BTTNODE)
-    if [ -n "$pid" ]; then
-        kill $pid
-    fi
     kill_all $WPASUPP
     if [ -n "$HOSTAPD" ]; then
         kill_all $HOSTAPD
@@ -4992,6 +4955,10 @@ check_conf()
         logger "Cannot find configuration file $WLX_CONF"
         exit 0
     fi
+}
+
+set_opmode()
+{
     if [ -n "$WIRE_ETH" ]; then
         WIRE_MAC=$(ip addr show dev $WIRE_ETH | grep 'link/' | awk '{print $2}') > /dev/null 2>&1
     fi
@@ -4999,11 +4966,43 @@ check_conf()
         logger "Cannot find primary wired interface $WIRE_ETH"
         exit 0
     fi
-}
-
-set_opmode()
-{
-    if [ "$BRI_PHY" = "2" ] && [ -n "$STA_IF" ]; then
+    if [ "$BTT_COUNT" = "2" -o "$BTT_COUNT" = "4" -o "$BTT_COUNT" = "8" -o "$BTT_COUNT" = "16" ]; then
+        if [ "$BTT_LOCAL" = "0" ]; then
+            if [ -n "$WLX_IF" ]; then
+                BTT_OP=1
+                WLX_OP=1
+                logger "UWIN info: WLX Mode --> Server"
+            elif [ -n "$WLN_IF" ]; then
+                BTT_OP=1
+                WLN_OP=1
+                logger "UWIN info: WLN Mode --> Server"
+            fi
+        elif [ $BTT_LOCAL -le $BTT_COUNT ]; then
+            if [ -n "$STA_IF" -a -n "$WLX_IF" ]; then
+                BTT_OP=1
+                STA_OP=1
+                STA_CONFIG=1
+                logger "UWIN info: STA Mode --> Client"
+                WLX_OP=1
+                logger "UWIN info: WLX Mode --> Server"
+            elif [ -n "$STX_IF" -a "$WLN_IF" ]; then
+                BTT_OP=1
+                STX_OP=1
+                STX_CONFIG=1
+                logger "UWIN info: STX Mode --> Client"
+                WLN_OP=1
+                logger "UWIN info: WLN Mode --> Server"
+            fi
+        fi
+        if [ "$BTT_OP" = "1" ]; then
+            BTT_CHAN_BAND="20"
+            logger "UWIN info: BTT ($BTT_COUNT,$BTT_LOCAL) node chaining enabled"
+        else
+            logger "UWIN info: Cannot run BTT ($BTT_COUNT,$BTT_LOCAL) node chaining"
+            exit 0
+        fi
+    fi
+    if [ "$BTT_OP" = "0" ] && [ "$BRI_PHY" = "2" ] && [ -n "$STA_IF" ]; then
         PCI_WDS=1
         BRI_OP=2
         STA_OP=1
@@ -5018,7 +5017,7 @@ set_opmode()
                 logger "UWIN info: SAP Mode --> Server"
             fi
         fi
-    elif [ "$BRI_PHY" = "1" ] && [ -n "$ETH_IF" ]; then
+    elif [ "$BTT_OP" = "0" ] && [ "$BRI_PHY" = "1" ] && [ -n "$ETH_IF" ]; then
         BRI_OP=1
         ETH_OP=1
         logger "UWIN info: ETH Mode --> Bridge PHY"
@@ -5038,7 +5037,9 @@ set_opmode()
             fi
         elif [ "$ETH_MODE" = "2" ]; then
             ETH_OP=2
-            LAN_OP=1
+            if [ "$BTT_OP" = "0" ]; then
+                LAN_OP=1
+            fi
             logger "UWIN info: ETH Mode --> Server"
         elif [ "$ETH_MODE" = "1" ]; then
             ETH_OP=1
@@ -5061,7 +5062,9 @@ set_opmode()
             fi
         elif [ "$USB_MODE" = "2" ]; then
             USB_OP=2
-            LAN_OP=1
+            if [ "$BTT_OP" = "0" ]; then
+                LAN_OP=1
+            fi
             logger "UWIN info: USB Mode --> Server"
         elif [ "$USB_MODE" = "1" ]; then
             USB_OP=1
@@ -5084,7 +5087,9 @@ set_opmode()
             fi
         elif [ "$ENX_MODE" = "2" ]; then
             ENX_OP=2
-            LAN_OP=1
+            if [ "$BTT_OP" = "0" ]; then
+                LAN_OP=1
+            fi
             logger "UWIN info: ENX Mode --> Server"
         elif [ "$ENX_MODE" = "1" ]; then
             ENX_OP=1
@@ -5095,7 +5100,7 @@ set_opmode()
             logger "UWIN info: ENX Mode --> Static"
         fi
     fi
-    if [ "$BRI_OP" != "2" ] && [ -n "$STA_IF" ]; then
+    if [ "$BTT_OP" = "0" -o "$BTT_LOCAL" = "0" ] && [ "$BRI_OP" != "2" ] && [ -n "$STA_IF" ]; then
         STA_OP=1
         if [ "$STA_MODE" = "1" ]; then
             STA_CONFIG=1
@@ -5120,7 +5125,7 @@ set_opmode()
                 logger "UWIN info: SAP Mode --> Server"
             fi
         fi
-    elif [ "$BRI_OP" != "2" ] && [ -n "$WLN_IF" ]; then
+    elif [ "$BTT_OP" = "0" ] && [ "$BRI_OP" != "2" ] && [ -n "$WLN_IF" ]; then
         WLN_OP=1
         if [ "$WLN_WDS" = "1" ]; then
             PCI_WDS=1
@@ -5151,7 +5156,7 @@ set_opmode()
             fi
         fi
     fi
-    if [ -n "$STX_IF" ]; then
+    if [ "$BTT_OP" = "0" -o "$BTT_LOCAL" = "0" ] && [ -n "$STX_IF" ]; then
         STX_OP=1
         if [ "$STX_MODE" = "1" ]; then
             STX_CONFIG=1
@@ -5159,7 +5164,7 @@ set_opmode()
         else
             logger "UWIN info: STX Mode --> Static"
         fi
-    elif [ -n "$WLX_IF" ]; then
+    elif [ "$BTT_OP" = "0" ] && [ -n "$WLX_IF" ]; then
         WLX_OP=1
         if [ "$WLX_WAN" = "1" ]; then
             if [ "$BRI_OP" != "0" ]; then
@@ -5173,28 +5178,10 @@ set_opmode()
             logger "UWIN info: WLX Mode --> Server"
         fi
     fi
-    if [ "$BTT_COUNT" = "2" -o "$BTT_COUNT" = "4" -o "$BTT_COUNT" = "8" -o "$BTT_COUNT" = "16" ]; then
-        if [ "$LAN_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "1" -o "$WLN_OP" = "1" ]; then
-            LAN_OP=0
-            BTT_OP=1
-        else
-            if [ "$LAN_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ $BTT_LOCAL -le $BTT_COUNT ]; then
-                if [ "$STA_OP" = "1" -a "$WLX_OP" = "1" ] || [ "$WLN_OP" = "1" -a "$STX_OP" = "1" ]; then
-                    LAN_OP=0
-                    BTT_OP=1
-                fi
-            fi
+    if [ "$BTT_OP" = "0" ] && [ "$BRI_OP" = "0" ]; then
+        if [ "$ETH_OP" = "1" ] && [ "$STA_OP" = "1" ] && [ "$STA_PRI" = "1" ]; then
+            logger "UWIN info: STA Mode Top Priority"
         fi
-        if [ "$BTT_OP" = "1" ]; then
-            BTT_CHAN_BAND="20"
-            logger "UWIN info: BTT ($BTT_COUNT,$BTT_LOCAL) node chaining enabled"
-        else
-            logger "UWIN info: Cannot run BTT ($BTT_COUNT,$BTT_LOCAL) node chaining"
-            exit 0
-        fi
-    fi
-    if [ "$BRI_OP" = "0" ] && [ "$ETH_OP" = "1" ] && [ "$STA_OP" = "1" ] && [ "$STA_PRI" = "1" ]; then
-        logger "UWIN info: STA Mode Top Priority" 
     fi
     if [ "$PCI_WDS" = "1" ]; then
         logger "UWIN info: Wi-Fi WDS enabled"
@@ -5211,7 +5198,6 @@ set_opmode()
         MON_USB_OP=1
         logger "UWIN info: Wi-Fi USB monitor enabled"
     fi
-    check_conf
 }
 
 clear_vars()
@@ -5258,7 +5244,6 @@ clear_conf()
     WIFI_USB=""
     BRI_IF=""
     ETH_IF=""
-    BRV_IF=""
     USB_IF=""
     ENX_IF=""
     STX_IF=""
@@ -5286,21 +5271,18 @@ clear_conf()
 #***********#
 # Main Loop #
 #***********#
-logger "\"$0\" checking..."
-
 kill_all $0
 
 clear_conf
 clear_vars
 
-if [ ! -e "/etc/uwin.conf" ]; then
-    logger "Cannot find configuration file /etc/uwin.conf"
+if [ ! -e "netconf" ]; then
+    logger "Cannot find configuration file"
     exit 0
 fi
-source "/etc/uwin.conf"
+source "netconf"
 set_opmode
-
-logger "UWIN network manager version $UWINVER"
+check_conf
 
 clean_drv
 clean_info

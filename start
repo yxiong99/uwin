@@ -1,6 +1,8 @@
 #!/bin/bash
 #
-logger "Start UWIN network manager..."
+UWINVER="v5.5.9"
+
+logger "Start UWIN network manager version $UWINVER..."
 
 ./netmgr.sh &
 

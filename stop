@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-source "/etc/uwin.conf"
+source "netconf"
 
 restart()
 {
