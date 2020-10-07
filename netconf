@@ -12,18 +12,22 @@ RESCONF=/etc/resolv.conf
 #####################################################
 # Ethernet Device
 WIRE_ETH=ens3
+#WIRE_ETH=enp0s25
 
 # WiFi PCI Module
 ATH_MOD=ath9k
+#IWL_MOD=iwldvm
 
 # WiFi PCI Device
 WIFI_PCI=wls2
+#WIFI_PCI=wlp3s0
 
 # WiFi USB Module
 RTL_MOD=88x2bu
 
 # WiFi USB Device
 WIFI_USB=wlxd45d649cfe31
+#WIFI_USB=wlxd45d649cfe2d
 
 #####################################################
 # WAN Bridge Interface
@@ -65,7 +69,7 @@ STA_IF=$WIFI_PCI
 #####################################################
 # 0: BTT COUNT - Disabled
 # #: BTT COUNT - Valid # (2, 4, 8, or 16)
-BTT_COUNT=8
+BTT_COUNT=4
 BTT_LOCAL=0
 
 BTT_NET=192.168.108.0/24
@@ -82,14 +86,14 @@ BRI_PHY=0
 BRI_MODE=1
 
 BRI_ALIVE=0
-BRI_ALIVE_IP=192.168.112.1
+BRI_ALIVE_IP=192.168.112.30
 
 BRI_PING=0
 BRI_PING_IP=8.8.8.8
 
 BRI_GW=192.168.112.1
-BRI_IP=192.168.112.30/25
-BRI_BRD=192.168.112.127
+BRI_IP=192.168.112.30/24
+BRI_BRD=192.168.112.255
 
 BRI_DHCP_PID=/var/run/dhclient-${BRI_IF}.pid
 BRI_DHCP_LEASE=/var/lib/dhcp/dhclient-${BRI_IF}.lease
@@ -106,14 +110,14 @@ ETH_MODE=1
 ETH_VLAN=0
 
 ETH_ALIVE=0
-ETH_ALIVE_IP=192.168.112.1
+ETH_ALIVE_IP=192.168.108.1
 
 ETH_PING=0
 ETH_PING_IP=8.8.8.8
 
-ETH_GW=192.168.112.97
-ETH_IP=192.168.112.99/27
-ETH_BRD=192.168.112.127
+ETH_GW=192.168.112.1
+ETH_IP=192.168.112.30/24
+ETH_BRD=192.168.112.255
 
 ETH_DHCP_PID=/var/run/dhclient-${ETH_IF}.pid
 ETH_DHCP_LEASE=/var/lib/dhcp/dhclient-${ETH_IF}.lease
@@ -197,7 +201,7 @@ STX_RSSI_STEP=10
 STX_CTRL=/var/run/wpa_supplicant-${STX_IF}/
 STX_PID=/var/run/wpa_supplicant-${STX_IF}.pid
 STX_LOG=/var/log/wpa_supplicant-${STX_IF}.log
-STX_CONF=/etc/wpa_supplicant-${STX_IF}.conf
+STX_CONF=/etc/conf/wpa_supplicant-${STX_IF}.conf
 
 STX_DHCP_PID=/var/run/dhclient-${STX_IF}.pid
 STX_DHCP_LEASE=/var/lib/dhcp/dhclient-${STX_IF}.lease
@@ -222,7 +226,7 @@ WLX_SWING_LOW=100
 WLX_CTRL=/var/run/hostapd-${WLX_IF}/
 WLX_PID=/var/run/hostapd-${WLX_IF}.pid
 WLX_LOG=/var/log/hostapd-${WLX_IF}.log
-WLX_CONF=/etc/hostapd-${WLX_IF}.conf
+WLX_CONF=/etc/conf/hostapd-${WLX_IF}.conf
 
 #####################################################
 # 0: MON WiFi PCI Disabled
@@ -234,10 +238,6 @@ MON_PCI_CHAN=8
 # 0: STA Mode - Static
 # 1: STA Mode - Client
 STA_MODE=1
-
-# 0: STA Lower Priority
-# 1: STA Higher Priority
-STA_PRI=0
 
 STA_ALIVE=0
 STA_ALIVE_IP=192.168.112.1
@@ -257,7 +257,7 @@ STA_RSSI_STEP=6
 STA_CTRL=/var/run/wpa_supplicant-${STA_IF}/
 STA_PID=/var/run/wpa_supplicant-${STA_IF}.pid
 STA_LOG=/var/log/wpa_supplicant-${STA_IF}.log
-STA_CONF=/etc/wpa_supplicant-${STA_IF}.conf
+STA_CONF=/etc/conf/wpa_supplicant-${STA_IF}.conf
 
 STA_DHCP_PID=/var/run/dhclient-${STA_IF}.pid
 STA_DHCP_LEASE=/var/lib/dhcp/dhclient-${STA_IF}.lease
@@ -295,7 +295,7 @@ SAP_SWING_LOW=100
 SAP_CTRL=/var/run/hostapd-${STA_IF}/
 SAP_PID=/var/run/hostapd-${STA_IF}.pid
 SAP_LOG=/var/log/hostapd-${STA_IF}.log
-SAP_CONF=/etc/hostapd-${STA_IF}-${SAP_IF}.conf
+SAP_CONF=/etc/conf/hostapd-${STA_IF}-${SAP_IF}.conf
 
 #####################################################
 # 0: WAN Bridge Disabled
@@ -312,7 +312,7 @@ WLN_VLAN=0
 WLN_VLAN_ID=100
 
 WLN_DBG=2
-WLN_POWER_TX=100
+WLN_POWER_TX=0
 
 WLN_TOGGLE_TEST=0
 WLN_TOGGLE_ON=60
@@ -326,7 +326,7 @@ WLN_SWING_LOW=100
 WLN_CTRL=/var/run/hostapd-${WLN_IF}/
 WLN_PID=/var/run/hostapd-${WLN_IF}.pid
 WLN_LOG=/var/log/hostapd-${WLN_IF}.log
-WLN_CONF=/etc/hostapd-${WLN_IF}.conf
+WLN_CONF=/etc/conf/hostapd-${WLN_IF}.conf
 
 #####################################################
 # 0: WAN Bridge Disabled
@@ -338,14 +338,14 @@ VAP_WAN=0
 VAP_VLAN=0
 VAP_VLAN_ID=200
 
-VAP_CONF11=/etc/hostapd-${WLN_IF}-${VAP_IF}.conf
-VAP_CONF12=/etc/hostapd-${WLN_IF}-${VAP_IF}_wan.conf
-VAP_CONF21=/etc/hostapd-${WLN_IF}_wan-${VAP_IF}.conf
-VAP_CONF22=/etc/hostapd-${WLN_IF}_wan-${VAP_IF}_wan.conf
-VAP_CONF31=/etc/hostapd-${WLN_IF}_wds-${VAP_IF}.conf
-VAP_CONF32=/etc/hostapd-${WLN_IF}_wds-${VAP_IF}_wan.conf
-VAP_CONF41=/etc/hostapd-${WLN_IF}_wan_wds-${VAP_IF}.conf
-VAP_CONF42=/etc/hostapd-${WLN_IF}_wan_wds-${VAP_IF}_wan.conf
+VAP_CONF11=/etc/conf/hostapd-${WLN_IF}-${VAP_IF}.conf
+VAP_CONF12=/etc/conf/hostapd-${WLN_IF}-${VAP_IF}_wan.conf
+VAP_CONF21=/etc/conf/hostapd-${WLN_IF}_wan-${VAP_IF}.conf
+VAP_CONF22=/etc/conf/hostapd-${WLN_IF}_wan-${VAP_IF}_wan.conf
+VAP_CONF31=/etc/conf/hostapd-${WLN_IF}_wds-${VAP_IF}.conf
+VAP_CONF32=/etc/conf/hostapd-${WLN_IF}_wds-${VAP_IF}_wan.conf
+VAP_CONF41=/etc/conf/hostapd-${WLN_IF}_wan_wds-${VAP_IF}.conf
+VAP_CONF42=/etc/conf/hostapd-${WLN_IF}_wan_wds-${VAP_IF}_wan.conf
 
 #####################################################
 LAN_IP=192.168.112.129/25

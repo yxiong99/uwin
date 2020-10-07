@@ -165,6 +165,9 @@ set_ip_tables()
             if [ "$STA_OP" = "1" ]; then
                 iptables -A INPUT -i $STA_IF -j ACCEPT
             fi
+            if [ "$STX_OP" = "1" ]; then
+                iptables -A INPUT -i $STX_IF -j ACCEPT
+            fi
         fi
     fi
     iptables -t nat -F
@@ -198,9 +201,9 @@ set_ip_tables()
     fi
 }
 
-#**********************#
-# BTT Bridge Operation #
-#**********************#
+#********************#
+# BTT DHCP Operation #
+#********************#
 del_enx_btt()
 {
     if [ -n "$BTT_MAC" ] && [ -n "$ENX_IF" ]; then
@@ -258,7 +261,7 @@ add_eth_btt()
     if [ -z "$brif" ]; then
         brctl addif $BTT_IF $ETH_IF
         logger "LAN ($ETH_IF) info: interface added to $BTT_IF"
-    fi    
+    fi
 }
 
 dump_lan_btt()
@@ -661,9 +664,9 @@ init_btt()
     fi
 }
 
-#**********************#
-# LAN Bridge Operation #
-#**********************#
+#********************#
+# LAN DHCP Operation #
+#********************#
 del_enx_lan()
 {
     if [ -n "$LAN_MAC" ] && [ -n "$ENX_IF" ]; then
@@ -918,7 +921,7 @@ ssid_wln()
 reset_wln()
 {
     logger "WLN ($WLN_IF) info: reset AP (bssid: $WLN_MAC)"
-    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "0" ]; then
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ]; then
         pid=$(pgrep -f $BTTNODE)
         if [ -n "$pid" ]; then
             kill $pid
@@ -932,7 +935,7 @@ reset_wln()
     fi
     stop_wln
     if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
-        WLX_STATE=""
+        WLN_STATE=""
     else
         WLN_STATE="STARTING"
     fi
@@ -995,7 +998,7 @@ check_wln()
         reset_wln
         return
     fi
-    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "0" ]; then
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ]; then
         pid=$(pgrep -f $BTTNODE)
         if [ -z "$pid" ]; then
             $BTTNODE -l $WLN_IF -m $BTT_COUNT -n $BTT_LOCAL &
@@ -1132,7 +1135,7 @@ start_wln()
         WLNCONF=$WLN_CONF
     fi
     WLN_CHAN=$(cat $WLNCONF | grep 'channel=' | cut -d '=' -f2)
-    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ] && [ "$WLX_OP" = "0" ]; then
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ]; then
         dump_phy_btt $WLN_CHAN $BTT_CHAN_BAND
     fi
     if [ "$WLN_DBG" = "3" ]; then
@@ -1231,6 +1234,19 @@ ssid_sap()
 
 reset_sap()
 {
+    logger "SAP ($SAP_IF) info: reset AP (bssid: $SAP_MAC)"
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ]; then
+        pid=$(pgrep -f $BTTNODE)
+        if [ -n "$pid" ]; then
+            kill $pid
+        fi
+        if [ -e "$PHY_INFO" ]; then
+            rm -f $PHY_INFO
+        fi
+        if [ -e "$BTT_INFO" ]; then
+            rm -f $BTT_INFO
+        fi
+    fi
     stop_sap
     SAP_SSID=""
     SAP_CHAN=0
@@ -1271,9 +1287,16 @@ check_sap()
         link_sap
         return
     fi
+    sap_phy=$(cat /sys/class/net/$SAP_IF/operstate) > /dev/null 2>&1
+    if [ "$sap_phy" = "down" ]; then
+        logger "SAP ($SAP_IF) info: interface down"
+        reset_sap
+        return
+    fi
     ssid=$(ssid_sap)
     if [ -z "$ssid" ]; then
-        link_sap
+        logger "SAP ($SAP_IF) info: SSID not found"
+        reset_sap
         return
     fi
     if [ -z "$SAP_SSID" ]; then
@@ -1293,10 +1316,13 @@ check_sap()
         fi
         return
     fi
-    sap_phy=$(cat /sys/class/net/$SAP_IF/operstate) > /dev/null 2>&1
-    if [ "$sap_phy" = "down" ]; then
-        ifconfig $SAP_IF up
-        return
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ]; then
+        pid=$(pgrep -f $BTTNODE)
+        if [ -z "$pid" ]; then
+            $BTTNODE -l $SAP_IF -m $BTT_COUNT -n $BTT_LOCAL &
+            return
+        fi
+        check_btt
     fi
     if [ "$LAN_OP" = "1" ]; then
         check_lan
@@ -1367,6 +1393,9 @@ start_sap()
     else
         echo "bridge=br-lan" >> $SAP_CONF
     fi
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" = "0" ]; then
+        dump_phy_btt $SAP_CHAN $BTT_CHAN_BAND
+    fi
     if [ "$SAP_DBG" = "3" ]; then
         $HOSTAPD -B -P $SAP_PID -t -f $SAP_LOG -d -K $SAP_CONF > /dev/null 2>&1
     elif [ "$SAP_DBG" = "2" ]; then
@@ -1430,13 +1459,6 @@ init_sap()
 #***************#
 dump_wan_sta()
 {
-    if [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ]; then
-        eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
-        if [ -n "$eth_gw" ]; then
-            dump_wan_eth
-            return
-        fi
-    fi
     echo -n > $WAN_INFO
     {
         echo "WAN info:"
@@ -1795,9 +1817,6 @@ check_sta()
         STA_ROAM_FULL_SCAN=50
         STA_ROAM_FAST_SCAN=0
         BTT_PHY_UPDATE=1
-        if [ "$SAP_OP" = "1" ]; then
-            start_sap
-        fi
     fi
     STA_RSSI_3=$STA_RSSI_2
     STA_RSSI_2=$STA_RSSI_1
@@ -1821,12 +1840,20 @@ check_sta()
             STA_RATE=$rate
         fi
         if [ "$BTT_PHY_UPDATE" = "1" ]; then
-            dump_phy_btt $STA_RSSI $STA_RATE $WLX_CHAN $BTT_CHAN_BAND
+            if [ "$SAP_OP" = "1" ]; then
+                dump_phy_btt $STA_RSSI $STA_RATE $SAP_CHAN $BTT_CHAN_BAND
+            else
+                dump_phy_btt $STA_RSSI $STA_RATE $WLX_CHAN $BTT_CHAN_BAND
+            fi
             return
         fi
         pid=$(pgrep -f $BTTNODE)
         if [ -z "$pid" ]; then
-            $BTTNODE -l $WLX_IF -m $BTT_COUNT -n $BTT_LOCAL -p $STA_BSSID -w $STA_IF &
+            if [ "$SAP_OP" = "1" ]; then
+                $BTTNODE -l $SAP_IF -m $BTT_COUNT -n $BTT_LOCAL -p $STA_BSSID -w $STA_IF &
+            else
+                $BTTNODE -l $WLX_IF -m $BTT_COUNT -n $BTT_LOCAL -p $STA_BSSID -w $STA_IF &
+            fi
             if [ "$BTT_LOCAL" = "$BTT_COUNT" ]; then
                 BTT_NODE_CHAIN_COUNT=0
                 sed '/auto_roam=/d' $STA_CONF > tmpconf
@@ -1919,38 +1946,26 @@ check_sta()
         if [ "$ENX_OP" = "1" ] && [ "$ENX_STATE" = "ATTACHED" ]; then
             enx_gw=$(ip route show dev $ENX_IF | grep default | awk '{print $3}')
             if [ -n "$enx_gw" ]; then
-                ENX_WAN_GW="$enx_gw"
+                ENX_WAN_GW=""
                 del_default_route $ENX_IF
             fi
         fi
         if [ "$USB_OP" = "1" ] && [ "$USB_STATE" = "ATTACHED" ]; then
             usb_gw=$(ip route show dev $USB_IF | grep default | awk '{print $3}')
             if [ -n "$usb_gw" ]; then
-                USB_WAN_GW="$usb_gw"
+                USB_WAN_GW=""
                 del_default_route $USB_IF
             fi
         fi
         if [ "$STX_OP" = "1" ] && [ "$STX_STATE" = "COMPLETED" ]; then
             stx_gw=$(ip route show dev $STX_IF | grep default | awk '{print $3}')
             if [ -n "$stx_gw" ]; then
-                STX_WAN_GW="$stx_gw"
+                STX_WAN_GW=""
                 del_default_route $STX_IF
-            fi
-        fi
-        if [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ] && [ "$STA_PRI" = "1" ]; then
-            eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
-            if [ -n "$eth_gw" ]; then
-                ETH_WAN_GW="$eth_gw"
-                del_default_route $ETH_IF
             fi
         fi
         sta_ip=$(ip addr show $STA_IF | grep 'inet ' | head -n1 | awk '{print $2}')
         if [ -z "$sta_ip" ]; then
-            if [ -n "$STA_WAN_IP" ]; then
-                ip addr add dev $STA_IF $STA_WAN_IP broadcast $STA_WAN_BRD > /dev/null 2>&1
-                STA_WAN_IP=""
-                return
-            fi
             config_sta
             return
         fi
@@ -1970,37 +1985,18 @@ check_sta()
         dump_wan_sta
     fi
     if [ "$BRI_OP" = "0" ] && [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ]; then
-        if [ "$STA_PRI" = "0" ]; then
-            eth_ip=$(ip addr show $ETH_IF | grep 'inet ' | head -n1 | awk '{print $2}')
-            if [ -n "$eth_ip" ]; then
-                return
+        eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
+        if [ -n "$eth_gw" ]; then
+            sta_gw=$(ip route show dev $STA_IF | grep default | awk '{print $3}')
+            if [ -n "$sta_gw" ]; then
+                STA_WAN_GW=""
+                del_default_route $STA_IF
             fi
-        else
-            eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
-            if [ -n "$eth_gw" ]; then
-                ETH_WAN_GW="$eth_gw"
-                del_default_route $ETH_IF
-                config_sta
-                return
-            fi
+            return
         fi
     fi
-    sta_gw=$(ip route show dev $STA_WAN_IF | grep default | head -n1 | awk '{print $3}')
+    sta_gw=$(ip route show dev $STA_IF | grep default | awk '{print $3}')
     if [ -z "$sta_gw" ]; then
-        if [ "$BRI_OP" = "0" ]; then
-            sta_net=$(ip route show dev $STA_IF | head -n1 | awk '{print $1}')
-            if [ -z "$sta_net" ]; then
-                if [ -n "$STA_WAN_GW" ] && [ -n "$STA_WAN_NET" ]; then
-                    for sta_net in $STA_WAN_NET; do
-                        ip route add $sta_net dev $STA_IF > /dev/null 2>&1
-                    done
-                    ip route add default via $STA_WAN_GW dev $STA_IF > /dev/null 2>&1
-                    STA_WAN_GW=""
-                    STA_WAN_NET=""
-                    return
-                fi
-            fi
-        fi
         config_sta
         return
     fi
@@ -2039,13 +2035,6 @@ check_sta()
             done
         done
     fi
-    if [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ] && [ "$STA_PRI" = "1" ]; then
-        for eth_route in $(ip route | grep dev.*$ETH_IF | awk '{print $1}'); do
-            for eth_route in $STA_WAN_NET; do
-                ip route del $eth_route dev $ETH_IF > /dev/null 2>&1
-            done
-        done
-    fi
     if [ ! -e "$WAN_INFO" ]; then
         dump_wan_sta
     fi
@@ -2067,7 +2056,7 @@ check_sta()
         STA_WAN_COUNT=$(($STA_WAN_COUNT - 1))
         return
     fi
-    STA_WAN_COUNT=4
+    STA_WAN_COUNT=8
     if [ -n "$STA_WAN_GW" ] && [ "$STA_PING" = "1" ]; then
         ping_sta
         if [ $? -eq 1 ]; then
@@ -2097,8 +2086,13 @@ link_sta()
         if [ -n "$bssid" ]; then
             bssid_sta "$bssid"
             dump_sta
-            if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ -z "$WLX_STATE" ]; then
-                WLX_STATE="STARTING"
+            if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
+                if [ -n "$WLX_IF" ] && [ -z "$WLX_STATE" ]; then
+                    WLX_STATE="STARTING"
+                fi
+            fi
+            if [ "$SAP_OP" = "1" ]; then
+                start_sap
             fi
             STA_IFACE_DOWN=0
             STA_STATE="COMPLETED"
@@ -2185,8 +2179,10 @@ stop_sta()
         if [ -e "$BTT_INFO" ]; then
             rm -f $BTT_INFO
         fi
-        stop_wlx
-        WLX_STATE=""
+        if [ "$SAP_OP" = "0" ]; then
+            stop_wlx
+            WLX_STATE=""
+        fi
     fi
     kill_one $STA_PID
     if [ -e $STA_CTRL ]; then
@@ -2547,20 +2543,6 @@ init_wlx()
 #***************#
 dump_wan_stx()
 {
-    if [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ]; then
-        eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
-        if [ -n "$eth_gw" ]; then
-            dump_wan_eth
-            return
-        fi
-    fi
-    if [ "$STA_OP" = "1" ] && [ "$STA_STATE" = "COMPLETED" ]; then
-        sta_gw=$(ip route show dev $STA_IF | grep default | awk '{print $3}')
-        if [ -n "$sta_gw" ]; then
-            dump_wan_sta
-            return
-        fi
-    fi
     echo -n > $WAN_INFO
     {
         echo "WAN info:"
@@ -2897,7 +2879,7 @@ check_stx()
         fi
         STX_RSSI=$rssi
     fi
-    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ "$STA_OP" = "0" ]; then
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
         rate=$($IWUTILS dev $STX_IF link | grep 'tx bitrate:' | awk '{print $3}') > /dev/null 2>&1
         if [ "$rate" != "$STX_RATE" ]; then
             BTT_PHY_UPDATE=1
@@ -2991,24 +2973,19 @@ check_stx()
     if [ "$ENX_OP" = "1" ] && [ "$ENX_STATE" = "ATTACHED" ]; then
         enx_gw=$(ip route show dev $ENX_IF | grep default | awk '{print $3}')
         if [ -n "$enx_gw" ]; then
-            ENX_WAN_GW="$enx_gw"
+            ENX_WAN_GW=""
             del_default_route $ENX_IF
         fi
     fi
     if [ "$USB_OP" = "1" ] && [ "$USB_STATE" = "ATTACHED" ]; then
         usb_gw=$(ip route show dev $USB_IF | grep default | awk '{print $3}')
         if [ -n "$usb_gw" ]; then
-            USB_WAN_GW="$usb_gw"
+            USB_WAN_GW=""
             del_default_route $USB_IF
         fi
     fi
     stx_ip=$(ip addr show $STX_IF | grep 'inet ' | head -n1 | awk '{print $2}')
     if [ -z "$stx_ip" ]; then
-        if [ -n "$STX_WAN_IP" ]; then
-            ip addr add dev $STX_IF $STX_WAN_IP broadcast $STX_WAN_BRD > /dev/null 2>&1
-            STX_WAN_IP=""
-            return
-        fi
         config_stx
         return
     fi
@@ -3027,31 +3004,29 @@ check_stx()
         dump_wan_stx
     fi
     if [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ]; then
-        eth_ip=$(ip addr show $ETH_IF | grep 'inet ' | head -n1 | awk '{print $2}')
-        if [ -n "$eth_ip" ]; then
+        eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
+        if [ -n "$eth_gw" ]; then
+            stx_gw=$(ip route show dev $STX_IF | grep default | awk '{print $3}')
+            if [ -n "$stx_gw" ]; then
+                STX_WAN_GW=""
+                del_default_route $STX_IF
+            fi
             return
         fi
     fi
     if [ "$STA_OP" = "1" ] && [ "$STA_STATE" = "COMPLETED" ]; then
-        sta_ip=$(ip addr show $STA_IF | grep 'inet ' | head -n1 | awk '{print $2}')
-        if [ -n "$sta_ip" ]; then
+        sta_gw=$(ip route show dev $STA_IF | grep default | awk '{print $3}')
+        if [ -n "$sta_gw" ]; then
+            stx_gw=$(ip route show dev $STX_IF | grep default | awk '{print $3}')
+            if [ -n "$stx_gw" ]; then
+                STX_WAN_GW=""
+                del_default_route $STX_IF
+            fi
             return
         fi
     fi
     stx_gw=$(ip route show dev $STX_WAN_IF | grep default | head -n1 | awk '{print $3}')
     if [ -z "$stx_gw" ]; then
-        stx_net=$(ip route show dev $STX_IF | head -n1 | awk '{print $1}')
-        if [ -z "$stx_net" ]; then
-            if [ -n "$STX_WAN_GW" ] && [ -n "$STX_WAN_NET" ]; then
-                for stx_net in $STX_WAN_NET; do
-                    ip route add $stx_net dev $STX_IF > /dev/null 2>&1
-                done
-                ip route add default via $STX_WAN_GW dev $STX_IF > /dev/null 2>&1
-                STX_WAN_GW=""
-                STX_WAN_NET=""
-                return
-            fi
-        fi
         config_stx
         return
     fi
@@ -3097,7 +3072,7 @@ check_stx()
         STX_WAN_COUNT=$(($STX_WAN_COUNT - 1))
         return
     fi
-    STX_WAN_COUNT=4
+    STX_WAN_COUNT=8
     if [ -n "$STX_WAN_GW" ] && [ "$STX_PING" = "1" ]; then
         ping_stx
         if [ $? -eq 1 ]; then
@@ -3121,8 +3096,10 @@ link_stx()
         if [ -n "$bssid" ]; then
             bssid_stx "$bssid"
             dump_stx
-            if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ -z "$WLN_STATE" ]; then
-                WLN_STATE="STARTING"
+            if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
+                if [ -n "$WLN_IF" ] && [ -z "$WLN_STATE" ]; then
+                    WLN_STATE="STARTING"
+                fi
             fi
             STX_IFACE_DOWN=0
             STX_STATE="COMPLETED"
@@ -3133,7 +3110,7 @@ link_stx()
         STX_LINK_COUNT=$(($STX_LINK_COUNT - 1))
         return
     fi
-    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ "$STA_OP" = "0" ]; then
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
         sed '/denylist={/,$d' $STX_CONF > tmpconf
         sed '/acceptlist={/,$d' tmpconf > $STX_CONF
         rm -f tmpconf
@@ -3186,7 +3163,7 @@ start_stx()
 
 stop_stx()
 {
-    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ] && [ "$STA_OP" = "0" ]; then
+    if [ "$BTT_OP" = "1" ] && [ "$BTT_LOCAL" != "0" ]; then
         pid=$(pgrep -f $BTTNODE)
         if [ -n "$pid" ]; then
             kill $pid
@@ -3248,20 +3225,6 @@ init_stx()
 #***************#
 dump_wan_enx()
 {
-    if [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ]; then
-        eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
-        if [ -n "$eth_gw" ]; then
-            dump_wan_eth
-            return
-        fi
-    fi
-    if [ "$STA_OP" = "1" ] && [ "$STA_STATE" = "COMPLETED" ]; then
-        sta_gw=$(ip route show dev $STA_IF | grep default | awk '{print $3}')
-        if [ -n "$sta_gw" ]; then
-            dump_wan_sta
-            return
-        fi
-    fi
     echo -n > $WAN_INFO
     {
         echo "WAN info:"
@@ -3325,6 +3288,7 @@ clean_enx()
     del_route $ENX_IF
     del_addr $ENX_IF
     ENX_WAN_GW=""
+    ENX_WAN_IP=""
 }
 
 static_enx()
@@ -3390,7 +3354,7 @@ check_enx()
     if [ "$USB_OP" = "1" ] && [ "$USB_STATE" = "ATTACHED" ]; then
         usb_gw=$(ip route show dev $USB_IF | grep default | awk '{print $3}')
         if [ -n "$usb_gw" ]; then
-            USB_WAN_GW="$usb_gw"
+            USB_WAN_GW=""
             del_default_route $USB_IF
         fi
     fi
@@ -3414,20 +3378,35 @@ check_enx()
         dump_wan_enx
     fi
     if [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ]; then
-        eth_ip=$(ip addr show $ETH_IF | grep 'inet ' | head -n1 | awk '{print $2}')
-        if [ -n "$eth_ip" ]; then
+        eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
+        if [ -n "$eth_gw" ]; then
+            enx_gw=$(ip route show dev $ENX_IF | grep default | awk '{print $3}')
+            if [ -n "$enx_gw" ]; then
+                ENX_WAN_GW=""
+                del_default_route $ENX_IF
+            fi
             return
         fi
     fi
     if [ "$STA_OP" = "1" ] && [ "$STA_STATE" = "COMPLETED" ]; then
-        sta_ip=$(ip addr show $STA_IF | grep 'inet ' | head -n1 | awk '{print $2}')
-        if [ -n "$sta_ip" ]; then
+        sta_gw=$(ip route show dev $STA_IF | grep default | awk '{print $3}')
+        if [ -n "$sta_gw" ]; then
+            enx_gw=$(ip route show dev $ENX_IF | grep default | awk '{print $3}')
+            if [ -n "$enx_gw" ]; then
+                ENX_WAN_GW=""
+                del_default_route $ENX_IF
+            fi
             return
         fi
     fi
     if [ "$STX_OP" = "1" ] && [ "$STX_STATE" = "COMPLETED" ]; then
-        stx_ip=$(ip addr show $STX_IF | grep 'inet ' | head -n1 | awk '{print $2}')
-        if [ -n "$stx_ip" ]; then
+        stx_gw=$(ip route show dev $STX_IF | grep default | awk '{print $3}')
+        if [ -n "$stx_gw" ]; then
+            enx_gw=$(ip route show dev $ENX_IF | grep default | awk '{print $3}')
+            if [ -n "$enx_gw" ]; then
+                ENX_WAN_GW=""
+                del_default_route $ENX_IF
+            fi
             return
         fi
     fi
@@ -3471,7 +3450,7 @@ check_enx()
         ENX_WAN_COUNT=$(($ENX_WAN_COUNT - 1))
         return
     fi
-    ENX_WAN_COUNT=4
+    ENX_WAN_COUNT=8
     if [ -n "$ENX_WAN_GW" ] && [ "$ENX_PING" = "1" ]; then
         ping_enx
         if [ $? -eq 1 ]; then
@@ -3576,20 +3555,6 @@ init_enx()
 #***************#
 dump_wan_usb()
 {
-    if [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ]; then
-        eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
-        if [ -n "$eth_gw" ]; then
-            dump_wan_eth
-            return
-        fi
-    fi
-    if [ "$STA_OP" = "1" ] && [ "$STA_STATE" = "COMPLETED" ]; then
-        sta_gw=$(ip route show dev $STA_IF | grep default | awk '{print $3}')
-        if [ -n "$sta_gw" ]; then
-            dump_wan_sta
-            return
-        fi
-    fi
     echo -n > $WAN_INFO
     {
         echo "WAN info:"
@@ -3653,6 +3618,7 @@ clean_usb()
     del_route $USB_IF
     del_addr $USB_IF
     USB_WAN_GW=""
+    USB_WAN_IP=""
 }
 
 static_usb()
@@ -3735,26 +3701,46 @@ check_usb()
         dump_wan_usb
     fi
     if [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ]; then
-        eth_ip=$(ip addr show $ETH_IF | grep 'inet ' | head -n1 | awk '{print $2}')
-        if [ -n "$eth_ip" ]; then
+        eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
+        if [ -n "$eth_gw" ]; then
+            usb_gw=$(ip route show dev $USB_IF | grep default | awk '{print $3}')
+            if [ -n "$USB_gw" ]; then
+                USB_WAN_GW=""
+                del_default_route $USB_IF
+            fi
             return
         fi
     fi
     if [ "$STA_OP" = "1" ] && [ "$STA_STATE" = "COMPLETED" ]; then
-        sta_ip=$(ip addr show $STA_IF | grep 'inet ' | head -n1 | awk '{print $2}')
-        if [ -n "$sta_ip" ]; then
+        sta_gw=$(ip route show dev $STA_IF | grep default | awk '{print $3}')
+        if [ -n "$sta_gw" ]; then
+            usb_gw=$(ip route show dev $USB_IF | grep default | awk '{print $3}')
+            if [ -n "$USB_gw" ]; then
+                USB_WAN_GW=""
+                del_default_route $USB_IF
+            fi
             return
         fi
     fi
     if [ "$STX_OP" = "1" ] && [ "$STX_STATE" = "COMPLETED" ]; then
-        stx_ip=$(ip addr show $STX_IF | grep 'inet ' | head -n1 | awk '{print $2}')
-        if [ -n "$stx_ip" ]; then
+        stx_gw=$(ip route show dev $STX_IF | grep default | awk '{print $3}')
+        if [ -n "$stx_gw" ]; then
+            usb_gw=$(ip route show dev $USB_IF | grep default | awk '{print $3}')
+            if [ -n "$USB_gw" ]; then
+                USB_WAN_GW=""
+                del_default_route $USB_IF
+            fi
             return
         fi
     fi
     if [ "$ENX_OP" = "1" ] && [ "$ENX_STATE" = "ATTACHED" ]; then
-        enx_ip=$(ip addr show $ENX_IF | grep 'inet ' | head -n1 | awk '{print $2}')
-        if [ -n "$enx_ip" ]; then
+        enx_gw=$(ip route show dev $ENX_IF | grep default | awk '{print $3}')
+        if [ -n "$enx_gw" ]; then
+            usb_gw=$(ip route show dev $USB_IF | grep default | awk '{print $3}')
+            if [ -n "$USB_gw" ]; then
+                USB_WAN_GW=""
+                del_default_route $USB_IF
+            fi
             return
         fi
     fi
@@ -3791,7 +3777,7 @@ check_usb()
         USB_WAN_COUNT=$(($USB_WAN_COUNT - 1))
         return
     fi
-    USB_WAN_COUNT=4
+    USB_WAN_COUNT=8
     if [ -n "$USB_WAN_GW" ] && [ "$USB_PING" = "1" ]; then
         ping_usb
         if [ $? -eq 1 ]; then
@@ -3966,13 +3952,6 @@ add_usb_eth()
 
 dump_wan_eth()
 {
-    if [ "$STA_OP" = "1" ] && [ "$STA_STATE" = "COMPLETED" ]; then
-        sta_gw=$(ip route show dev $STA_IF | grep default | awk '{print $3}')
-        if [ -n "$sta_gw" ]; then
-            dump_wan_sta
-            return
-        fi
-    fi
     echo -n > $WAN_INFO
     {
         echo "WAN info:"
@@ -4057,6 +4036,7 @@ clean_eth()
     del_route $ETH_WAN_IF
     del_addr $ETH_WAN_IF
     ETH_WAN_GW=""
+    ETH_WAN_IP=""
 }
 
 static_eth()
@@ -4145,28 +4125,28 @@ check_eth()
         if [ "$ENX_OP" = "1" ] && [ "$ENX_STATE" = "ATTACHED" ]; then
             enx_gw=$(ip route show dev $ENX_IF | grep default | awk '{print $3}')
             if [ -n "$enx_gw" ]; then
-                ENX_WAN_GW="$enx_gw"
+                ENX_WAN_GW=""
                 del_default_route $ENX_IF
             fi
         fi
         if [ "$USB_OP" = "1" ] && [ "$USB_STATE" = "ATTACHED" ]; then
             usb_gw=$(ip route show dev $USB_IF | grep default | awk '{print $3}')
             if [ -n "$usb_gw" ]; then
-                USB_WAN_GW="$usb_gw"
+                USB_WAN_GW=""
                 del_default_route $USB_IF
             fi
         fi
         if [ "$STX_OP" = "1" ] && [ "$STX_STATE" = "COMPLETED" ]; then
             stx_gw=$(ip route show dev $STX_IF | grep default | awk '{print $3}')
             if [ -n "$stx_gw" ]; then
-                STX_WAN_GW="$stx_gw"
+                STX_WAN_GW=""
                 del_default_route $STX_IF
             fi
         fi
-        if [ "$STA_OP" = "1" ] && [ "$STA_STATE" = "COMPLETED" ] && [ "$STA_PRI" = "0" ]; then
+        if [ "$STA_OP" = "1" ] && [ "$STA_STATE" = "COMPLETED" ]; then
             sta_gw=$(ip route show dev $STA_IF | grep default | awk '{print $3}')
             if [ -n "$sta_gw" ]; then
-                STA_WAN_GW="$sta_gw"
+                STA_WAN_GW=""
                 del_default_route $STA_IF
             fi
         fi
@@ -4189,22 +4169,6 @@ check_eth()
             ETH_WAN_NET=${eth_net}" $ETH_WAN_NET"
         done
         dump_wan_eth
-    fi
-    if [ "$BRI_OP" = "0" ] && [ "$STA_OP" = "1" ] && [ "$STA_STATE" = "COMPLETED" ]; then
-        if [ "$STA_PRI" = "1" ]; then
-            sta_ip=$(ip addr show $STA_IF | grep 'inet ' | head -n1 | awk '{print $2}')
-            if [ -n "$sta_ip" ]; then
-                return
-            fi
-        else
-            sta_gw=$(ip route show dev $STA_IF | grep default | awk '{print $3}')
-            if [ -n "$sta_gw" ]; then
-                STA_WAN_GW="$sta_gw"
-                del_default_route $STA_IF
-                config_eth
-                return
-            fi
-        fi
     fi
     eth_gw=$(ip route show dev $ETH_WAN_IF | grep default | awk '{print $3}')
     if [ -z "$eth_gw" ]; then
@@ -4246,7 +4210,7 @@ check_eth()
             done
         done
     fi
-    if [ "$STA_OP" = "1" ] && [ "$STA_STATE" = "COMPLETED" ] && [ "$STA_PRI" = "0" ]; then
+    if [ "$STA_OP" = "1" ] && [ "$STA_STATE" = "COMPLETED" ]; then
         for sta_route in $(ip route | grep dev.*$STA_IF | awk '{print $1}'); do
             for sta_route in $ETH_WAN_NET; do
                 ip route del $sta_route dev $STA_IF > /dev/null 2>&1
@@ -4274,7 +4238,7 @@ check_eth()
         ETH_WAN_COUNT=$(($ETH_WAN_COUNT - 1))
         return
     fi
-    ETH_WAN_COUNT=4
+    ETH_WAN_COUNT=8
     if [ -n "$ETH_WAN_GW" ] && [ "$ETH_PING" = "1" ]; then
         ping_eth
         if [ $? -eq 1 ]; then
@@ -4324,7 +4288,7 @@ link_eth()
     eth_phy=$(cat /sys/class/net/$ETH_IF/operstate) > /dev/null 2>&1
     if [ "$eth_phy" = "down" ]; then
         ifconfig $ETH_IF up
-        if [ $ETH_PHY_UP -eq 1 ]; then
+        if [ "$ETH_PHY_UP" = "1" ]; then
             ETH_PHY_UP=0
             ETH_STATE="DETACHED"
             if [ "$ETH_OP" = "1" ]; then
@@ -4336,7 +4300,7 @@ link_eth()
         fi
         return
     fi
-    if [ $ETH_PHY_UP -eq 0 ]; then
+    if [ "$ETH_PHY_UP" = "0" ]; then
         ETH_PHY_UP=1
         ETH_STATE="ATTACHED"
     fi
@@ -4499,6 +4463,7 @@ vlan_usb_eth()
 init_eth()
 {
     if [ -z "$ETH_IF" ]; then
+        ifconfig $WIRE_ETH down
         return
     fi
     ETH_MAC=""
@@ -4803,23 +4768,23 @@ clean_wifi()
     if [ -e "/var/log/hostapd-$WIFI_PCI.log" ]; then
         rm /var/log/hostapd-$WIFI_PCI.log
     fi
-    if [ -e "/var/log/wpa_supplicant-$WIFI_PCI.log" ]; then
-        rm /var/log/wpa_supplicant-$WIFI_PCI.log
-    fi
     if [ -e "/var/run/hostapd-$WIFI_PCI.pid" ]; then
         rm /var/run/hostapd-$WIFI_PCI.pid
-    fi
-    if [ -e "/var/run/wpa_supplicant-$WIFI_PCI.pid" ]; then
-        rm /var/run/wpa_supplicant-$WIFI_PCI.pid
     fi
     if [ -e "/var/log/hostapd-$WIFI_USB.log" ]; then
         rm /var/log/hostapd-$WIFI_USB.log
     fi
-    if [ -e "/var/log/wpa_supplicant-$WIFI_USB.log" ]; then
-        rm /var/log/wpa_supplicant-$WIFI_USB.log
-    fi
     if [ -e "/var/run/hostapd-$WIFI_USB.pid" ]; then
         rm /var/run/hostapd-$WIFI_USB.pid
+    fi
+    if [ -e "/var/log/wpa_supplicant-$WIFI_PCI.log" ]; then
+        rm /var/log/wpa_supplicant-$WIFI_PCI.log
+    fi
+    if [ -e "/var/run/wpa_supplicant-$WIFI_PCI.pid" ]; then
+        rm /var/run/wpa_supplicant-$WIFI_PCI.pid
+    fi
+    if [ -e "/var/log/wpa_supplicant-$WIFI_USB.log" ]; then
+        rm /var/log/wpa_supplicant-$WIFI_USB.log
     fi
     if [ -e "/var/run/wpa_supplicant-$WIFI_USB.pid" ]; then
         rm /var/run/wpa_supplicant-$WIFI_USB.pid
@@ -4976,6 +4941,10 @@ set_opmode()
                 BTT_OP=1
                 WLN_OP=1
                 logger "UWIN info: WLN Mode --> Server"
+            elif [ -n "$STA_IF" -a -n "$SAP_IF" ]; then
+                BTT_OP=1
+                SAP_OP=1
+                logger "UWIN info: SAP Mode --> Server"
             fi
         elif [ $BTT_LOCAL -le $BTT_COUNT ]; then
             if [ -n "$STA_IF" -a -n "$WLX_IF" ]; then
@@ -4992,38 +4961,138 @@ set_opmode()
                 logger "UWIN info: STX Mode --> Client"
                 WLN_OP=1
                 logger "UWIN info: WLN Mode --> Server"
+            elif [  -n "$STA_IF" -a -n "$SAP_IF" ]; then
+                BTT_OP=1
+                STA_OP=1
+                STA_CONFIG=1
+                logger "UWIN info: STA Mode --> Client"
+                SAP_OP=1
+                logger "UWIN info: SAP Mode --> Server"
             fi
         fi
         if [ "$BTT_OP" = "1" ]; then
             BTT_CHAN_BAND="20"
             logger "UWIN info: BTT ($BTT_COUNT,$BTT_LOCAL) node chaining enabled"
+            if [ "$STA_OP" = "0" ] && [ "$SAP_OP" = "1" ]; then
+                STA_OP=1
+                if [ "$STA_MODE" = "1" ]; then
+                    STA_CONFIG=1
+                    logger "UWIN info: STA Mode --> Client"
+                else
+                    logger "UWIN info: STA Mode --> Static"
+                fi
+            fi
         else
             logger "UWIN info: Cannot run BTT ($BTT_COUNT,$BTT_LOCAL) node chaining"
             exit 0
         fi
     fi
-    if [ "$BTT_OP" = "0" ] && [ "$BRI_PHY" = "2" ] && [ -n "$STA_IF" ]; then
-        PCI_WDS=1
-        BRI_OP=2
-        STA_OP=1
-        logger "UWIN info: STA Mode --> Bridge PHY"
-        if [ -n "$SAP_IF" ]; then
-            SAP_OP=1
-            SAP_WDS=1
-            if [ "$SAP_WAN" = "1" ]; then
-                logger "UWIN info: SAP Mode --> Bridge"
+    if [ "$BTT_OP" = "0" ]; then
+        if [ "$BRI_PHY" = "2" ] && [ -n "$STA_IF" ]; then
+            BRI_OP=2
+            STA_OP=1
+            PCI_WDS=1
+            logger "UWIN info: STA Mode --> Bridge PHY"
+            if [ -n "$SAP_IF" ]; then
+                SAP_OP=1
+                SAP_WDS=1
+                if [ "$SAP_WAN" = "1" ]; then
+                    logger "UWIN info: SAP Mode --> Bridge"
+                else
+                    LAN_OP=1
+                    logger "UWIN info: SAP Mode --> Server"
+                fi
+            fi
+        elif [ "$BRI_PHY" = "1" ] && [ -n "$ETH_IF" ]; then
+            BRI_OP=1
+            ETH_OP=1
+            logger "UWIN info: ETH Mode --> Bridge PHY"
+        fi
+        if [ "$BRI_OP" != "0" ] && [ "$BRI_MODE" = "1" ]; then
+            BRI_CONFIG=1
+        fi
+        if [ "$BRI_OP" != "2" ] && [ -n "$WLN_IF" ]; then
+            WLN_OP=1
+            if [ "$WLN_WDS" = "1" ]; then
+                PCI_WDS=1
+            fi
+            if [ "$WLN_WAN" = "1" ]; then
+                if [ "$BRI_OP" = "1" ]; then
+                    logger "UWIN info: WLN Mode --> Bridge"
+                else
+                    logger "No WAN bridge found for WLN interface"
+                    exit 0
+                fi
             else
                 LAN_OP=1
-                logger "UWIN info: SAP Mode --> Server"
+                logger "UWIN info: WLN Mode --> Server"
+            fi
+            if [ -n "$VAP_IF" ]; then
+                VAP_OP=1
+                if [ "$VAP_WAN" = "1" ]; then
+                    if [ "$BRI_OP" = "1" ]; then
+                        logger "UWIN info: VAP Mode --> Bridge"
+                    else
+                        logger "No WAN bridge found for VAP interface"
+                        exit 0
+                    fi
+                else
+                    LAN_OP=1
+                    logger "UWIN info: VAP Mode --> Server"
+                fi
+            fi
+        elif [ -n "$WLX_IF" ]; then
+            WLX_OP=1
+            if [ "$WLX_WAN" = "1" ]; then
+                if [ "$BRI_OP" != "0" ]; then
+                    logger "UWIN info: WLX Mode --> Bridge"
+                else
+                    logger "No WAN bridge found for WLX interface"
+                    exit 0
+                fi
+            else
+                LAN_OP=1
+                logger "UWIN info: WLX Mode --> Server"
             fi
         fi
-    elif [ "$BTT_OP" = "0" ] && [ "$BRI_PHY" = "1" ] && [ -n "$ETH_IF" ]; then
-        BRI_OP=1
-        ETH_OP=1
-        logger "UWIN info: ETH Mode --> Bridge PHY"
     fi
-    if [ "$BRI_OP" != "0" ] && [ "$BRI_MODE" = "1" ]; then
-        BRI_CONFIG=1
+    if [ "$BTT_OP" = "0" ] || [ "$BTT_LOCAL" = "0" ]; then
+        if [ "$STA_OP" = "0" ] && [ -n "$STA_IF" ]; then
+            STA_OP=1
+            if [ "$STA_MODE" = "1" ]; then
+                STA_CONFIG=1
+                logger "UWIN info: STA Mode --> Client"
+            else
+                logger "UWIN info: STA Mode --> Static"
+            fi
+            if [ -n "$SAP_IF" ]; then
+                SAP_OP=1
+                if [ "$SAP_WDS" = "1" ]; then
+                    PCI_WDS=1
+                fi
+                if [ "$SAP_WAN" = "1" ]; then
+                    if [ "$BRI_OP" = "1" ]; then
+                        logger "UWIN info: SAP Mode --> Bridge"
+                    else
+                        logger "No WAN bridge found for SAP interface"
+                        exit 0
+                    fi
+                else
+                    if [ "$BTT_OP" = "0" ]; then
+                        LAN_OP=1
+                    fi
+                    logger "UWIN info: SAP Mode --> Server"
+                fi
+            fi
+        elif [ -n "$STX_IF" ]; then
+            STX_OP=1
+            if [ "$STX_MODE" = "1" ]; then
+                STX_CONFIG=1
+                logger "UWIN info: STX Mode --> Client"
+            else
+                logger "UWIN info: STX Mode --> Static"
+            fi
+        fi
     fi
     if [ "$BRI_OP" != "1" ] && [ -n "$ETH_IF" ]; then
         if [ "$ETH_MODE" = "3" ]; then
@@ -5041,13 +5110,15 @@ set_opmode()
                 LAN_OP=1
             fi
             logger "UWIN info: ETH Mode --> Server"
-        elif [ "$ETH_MODE" = "1" ]; then
-            ETH_OP=1
-            ETH_CONFIG=1
-            logger "UWIN info: ETH Mode --> Client"
-        else
-            ETH_OP=1
-            logger "UWIN info: ETH Mode --> Static"
+        elif [ "$BTT_OP" = "0" ] || [ "$BTT_LOCAL" = "0" ]; then
+            if [ "$ETH_MODE" = "1" ]; then
+                ETH_OP=1
+                ETH_CONFIG=1
+                logger "UWIN info: ETH Mode --> Client"
+            else
+                ETH_OP=1
+                logger "UWIN info: ETH Mode --> Static"
+            fi
         fi
     fi
     if [ -n "$USB_IF" ]; then
@@ -5066,13 +5137,15 @@ set_opmode()
                 LAN_OP=1
             fi
             logger "UWIN info: USB Mode --> Server"
-        elif [ "$USB_MODE" = "1" ]; then
-            USB_OP=1
-            USB_CONFIG=1
-            logger "UWIN info: USB Mode --> Client"
-        else
-            USB_OP=1
-            logger "UWIN info: USB Mode --> Static"
+        elif [ "$BTT_OP" = "0" ] || [ "$BTT_LOCAL" = "0" ]; then
+            if [ "$USB_MODE" = "1" ]; then
+                USB_OP=1
+                USB_CONFIG=1
+                logger "UWIN info: USB Mode --> Client"
+            else
+                USB_OP=1
+                logger "UWIN info: USB Mode --> Static"
+            fi
         fi
     fi
     if [ -n "$ENX_IF" ]; then
@@ -5091,96 +5164,15 @@ set_opmode()
                 LAN_OP=1
             fi
             logger "UWIN info: ENX Mode --> Server"
-        elif [ "$ENX_MODE" = "1" ]; then
-            ENX_OP=1
-            ENX_CONFIG=1
-            logger "UWIN info: ENX Mode --> Client"
-        else
-            ENX_OP=1
-            logger "UWIN info: ENX Mode --> Static"
-        fi
-    fi
-    if [ "$BTT_OP" = "0" -o "$BTT_LOCAL" = "0" ] && [ "$BRI_OP" != "2" ] && [ -n "$STA_IF" ]; then
-        STA_OP=1
-        if [ "$STA_MODE" = "1" ]; then
-            STA_CONFIG=1
-            logger "UWIN info: STA Mode --> Client"
-        else
-            logger "UWIN info: STA Mode --> Static"
-        fi
-        if [ -n "$SAP_IF" ]; then
-            SAP_OP=1
-            if [ "$SAP_WDS" = "1" ]; then
-                PCI_WDS=1
-            fi
-            if [ "$SAP_WAN" = "1" ]; then
-                if [ "$BRI_OP" = "1" ]; then
-                    logger "UWIN info: SAP Mode --> Bridge"
-                else
-                    logger "No WAN bridge found for SAP interface"
-                    exit 0
-                fi
+        elif [ "$BTT_OP" = "0" ] || [ "$BTT_LOCAL" = "0" ]; then
+            if [ "$ENX_MODE" = "1" ]; then
+                ENX_OP=1
+                ENX_CONFIG=1
+                logger "UWIN info: ENX Mode --> Client"
             else
-                LAN_OP=1
-                logger "UWIN info: SAP Mode --> Server"
+                ENX_OP=1
+                logger "UWIN info: ENX Mode --> Static"
             fi
-        fi
-    elif [ "$BTT_OP" = "0" ] && [ "$BRI_OP" != "2" ] && [ -n "$WLN_IF" ]; then
-        WLN_OP=1
-        if [ "$WLN_WDS" = "1" ]; then
-            PCI_WDS=1
-        fi
-        if [ "$WLN_WAN" = "1" ]; then
-            if [ "$BRI_OP" = "1" ]; then
-                logger "UWIN info: WLN Mode --> Bridge"
-            else
-                logger "No WAN bridge found for WLN interface"
-                exit 0
-            fi
-        else
-            LAN_OP=1
-            logger "UWIN info: WLN Mode --> Server"
-        fi
-        if [ -n "$VAP_IF" ]; then
-            VAP_OP=1
-            if [ "$VAP_WAN" = "1" ]; then
-                if [ "$BRI_OP" = "1" ]; then
-                    logger "UWIN info: VAP Mode --> Bridge"
-                else
-                    logger "No WAN bridge found for VAP interface"
-                    exit 0
-                fi
-            else
-                LAN_OP=1
-                logger "UWIN info: VAP Mode --> Server"
-            fi
-        fi
-    fi
-    if [ "$BTT_OP" = "0" -o "$BTT_LOCAL" = "0" ] && [ -n "$STX_IF" ]; then
-        STX_OP=1
-        if [ "$STX_MODE" = "1" ]; then
-            STX_CONFIG=1
-            logger "UWIN info: STX Mode --> Client"
-        else
-            logger "UWIN info: STX Mode --> Static"
-        fi
-    elif [ "$BTT_OP" = "0" ] && [ -n "$WLX_IF" ]; then
-        WLX_OP=1
-        if [ "$WLX_WAN" = "1" ]; then
-            if [ "$BRI_OP" != "0" ]; then
-                logger "UWIN info: WLX Mode --> Bridge"
-            else
-                logger "No WAN bridge found for WLX interface"
-                exit 0
-            fi
-        else
-            LAN_OP=1
-            logger "UWIN info: WLX Mode --> Server"
-        fi
-    fi
-    if [ "$BTT_OP" = "0" ] && [ "$BRI_OP" = "0" ]; then
-        if [ "$ETH_OP" = "1" ] && [ "$STA_OP" = "1" ] && [ "$STA_PRI" = "1" ]; then
-            logger "UWIN info: STA Mode Top Priority"
         fi
     fi
     if [ "$PCI_WDS" = "1" ]; then
