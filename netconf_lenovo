@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 WPASUPP=/usr/sbin/wpa_supplicant_uwin
+WPACLI=/usr/sbin/wpa_cli_uwin
 HOSTAPD=/usr/sbin/hostapd_uwin
 BTTNODE=/usr/sbin/bttnode_uwin
 IWUTILS=/sbin/iw
@@ -11,23 +12,19 @@ RESCONF=/etc/resolv.conf
 
 #####################################################
 # Ethernet Device
-WIRE_ETH=ens3
-#WIRE_ETH=enp0s25
+WIRE_ETH=enp0s25
 
 # WiFi PCI Module
-ATH_MOD=ath9k
-#IWL_MOD=iwldvm
+IWL_MOD=iwldvm
 
 # WiFi PCI Device
-WIFI_PCI=wls2
-#WIFI_PCI=wlp3s0
+WIFI_PCI=wlp3s0
 
 # WiFi USB Module
 RTL_MOD=88x2bu
 
 # WiFi USB Device
-WIFI_USB=wlxd45d649cfe31
-#WIFI_USB=wlxd45d649cfe2d
+WIFI_USB=wlxd45d649cfe2d
 
 #####################################################
 # WAN Bridge Interface
@@ -48,15 +45,6 @@ ETH_IF=$WIRE_ETH
 # WiFi WAN Interface
 STA_IF=$WIFI_PCI
 
-# WiFi Soft AP Interface
-#SAP_IF=sap0
-
-# WiFi LAN Interface
-#WLN_IF=$WIFI_PCI
-
-# WiFi Virtual AP Interface
-#VAP_IF=vap0
-
 # WiFi Monitor Interface
 #MON_IF=mon0
 
@@ -64,13 +52,13 @@ STA_IF=$WIFI_PCI
 #STX_IF=$WIFI_USB
 
 # WiFi Extra LAN Interface
-#WLX_IF=$WIFI_USB
+WLX_IF=$WIFI_USB
 
 #####################################################
 # 0: BTT COUNT - Disabled
 # #: BTT COUNT - Valid # (2, 4, 8, or 16)
-BTT_COUNT=4
-BTT_LOCAL=0
+BTT_COUNT=0
+BTT_LOCAL=4
 
 BTT_NET=192.168.108.0/24
 BTT_DHCP_LEASE=/var/lib/dhcp/dnsmasq.leases
@@ -79,7 +67,7 @@ BTT_DHCP_LEASE=/var/lib/dhcp/dnsmasq.leases
 # 0: Bridge PHY - NONE
 # 1: Bridge PHY - WIRE ETH
 # 2: Bridge PHY - WIFI PCI
-BRI_PHY=0
+BRI_PHY=1
 
 # 0: Bridge Mode Static
 # 1: Bridge Mode Client
@@ -92,7 +80,7 @@ BRI_PING=0
 BRI_PING_IP=8.8.8.8
 
 BRI_GW=192.168.112.1
-BRI_IP=192.168.112.30/24
+BRI_IP=192.168.112.3/24
 BRI_BRD=192.168.112.255
 
 BRI_DHCP_PID=/var/run/dhclient-${BRI_IF}.pid
@@ -110,13 +98,13 @@ ETH_MODE=1
 ETH_VLAN=0
 
 ETH_ALIVE=0
-ETH_ALIVE_IP=192.168.108.1
+ETH_ALIVE_IP=192.168.112.30
 
 ETH_PING=0
 ETH_PING_IP=8.8.8.8
 
 ETH_GW=192.168.112.1
-ETH_IP=192.168.112.30/24
+ETH_IP=192.168.112.3/24
 ETH_BRD=192.168.112.255
 
 ETH_DHCP_PID=/var/run/dhclient-${ETH_IF}.pid
@@ -135,14 +123,14 @@ USB_VLAN=0
 USB_VLAN_ID=500
 
 USB_ALIVE=0
-USB_ALIVE_IP=192.168.112.1
+USB_ALIVE_IP=192.168.112.30
 
 USB_PING=0
 USB_PING_IP=8.8.8.8
 
-USB_GW=192.168.112.129
-USB_IP=192.168.112.200/25
-USB_BRD=192.168.112.255
+USB_GW=192.168.0.1
+USB_IP=192.168.0.100/24
+USB_BRD=192.168.0.255
 
 USB_DHCP_PID=/var/run/dhclient-${USB_IF}.pid
 USB_DHCP_LEASE=/var/lib/dhcp/dhclient-${USB_IF}.lease
@@ -160,13 +148,13 @@ ENX_VLAN=0
 ENX_VLAN_ID=400
 
 ENX_ALIVE=0
-ENX_ALIVE_IP=192.168.112.1
+ENX_ALIVE_IP=192.168.112.30
 
 ENX_PING=0
 ENX_PING_IP=8.8.8.8
 
 ENX_GW=192.168.1.1
-ENX_IP=192.168.1.1/24
+ENX_IP=192.168.1.100/24
 ENX_BRD=192.168.1.255
 
 ENX_DHCP_PID=/var/run/dhclient-${ENX_IF}.pid
@@ -184,18 +172,18 @@ MON_USB_CHAN=149
 STX_MODE=1
 
 STX_ALIVE=0
-STX_ALIVE_IP=192.168.112.1
+STX_ALIVE_IP=192.168.112.30
 
 STX_PING=0
 STX_PING_IP=8.8.8.8
 
-STX_GW=192.168.112.129
-STX_IP=192.168.112.130/25
+STX_GW=192.168.112.1
+STX_IP=192.168.112.3/26
 STX_BRD=192.168.112.255
 
 STX_DBG=2
 STX_ACL=0
-STX_AUTO_ROAM=0
+STX_AUTO_ROAM=2
 STX_RSSI_STEP=10
 
 STX_CTRL=/var/run/wpa_supplicant-${STX_IF}/
@@ -209,7 +197,7 @@ STX_DHCP_LEASE=/var/lib/dhcp/dhclient-${STX_IF}.lease
 #####################################################
 # 0: WAN Bridge Disabled
 # 1: WAN Bridge Enabled
-WLX_WAN=0
+WLX_WAN=1
 
 WLX_DBG=2
 WLX_POWER_TX=0
@@ -240,18 +228,18 @@ MON_PCI_CHAN=8
 STA_MODE=1
 
 STA_ALIVE=0
-STA_ALIVE_IP=192.168.112.1
+STA_ALIVE_IP=192.168.112.30
 
 STA_PING=0
 STA_PING_IP=8.8.8.8
 
-STA_GW=192.168.112.65
-STA_IP=192.168.112.69/27
-STA_BRD=192.168.112.95
+STA_GW=192.168.112.1
+STA_IP=192.168.112.3/24
+STA_BRD=192.168.112.255
 
 STA_DBG=2
 STA_ACL=0
-STA_AUTO_ROAM=0
+STA_AUTO_ROAM=2
 STA_RSSI_STEP=6
 
 STA_CTRL=/var/run/wpa_supplicant-${STA_IF}/
@@ -263,98 +251,13 @@ STA_DHCP_PID=/var/run/dhclient-${STA_IF}.pid
 STA_DHCP_LEASE=/var/lib/dhcp/dhclient-${STA_IF}.lease
 
 #####################################################
-# 0: WAN Bridge Disabled
-# 1: WAN Bridge Enabled
-SAP_WAN=1
-
-# 0: SAP WDS Disabled
-# 1: SAP WDS Enabled
-SAP_WDS=0
-
-# 0: SAP VLAN Disabled
-# 1: SAP VLAN Enabled
-SAP_VLAN=0
-SAP_VLAN_ID=300
-
-# 0: SAP DHCP Default
-# 1: SAP DHCP Reconfig
-SAP_CONFIG=0
-
-SAP_DBG=1
-SAP_POWER_TX=0
-
-SAP_TOGGLE_TEST=0
-SAP_TOGGLE_ON=60
-SAP_TOGGLE_OFF=60
-SAP_SWING_TEST=0
-SAP_SWING_DWELL=15
-SAP_SWING_HIGH=2500
-SAP_SWING_STEP=300
-SAP_SWING_LOW=100
-
-SAP_CTRL=/var/run/hostapd-${STA_IF}/
-SAP_PID=/var/run/hostapd-${STA_IF}.pid
-SAP_LOG=/var/log/hostapd-${STA_IF}.log
-SAP_CONF=/etc/conf/hostapd-${STA_IF}-${SAP_IF}.conf
-
-#####################################################
-# 0: WAN Bridge Disabled
-# 1: WAN Bridge Enabled
-WLN_WAN=0
-
-# 0: WLN WDS Disabled
-# 1: WLN WDS Enabled
-WLN_WDS=0
-
-# 0: WLN VLAN Disabled
-# 1: WLN VLAN Enabled
-WLN_VLAN=0
-WLN_VLAN_ID=100
-
-WLN_DBG=2
-WLN_POWER_TX=0
-
-WLN_TOGGLE_TEST=0
-WLN_TOGGLE_ON=60
-WLN_TOGGLE_OFF=60
-WLN_SWING_TEST=0
-WLN_SWING_DWELL=15
-WLN_SWING_HIGH=2500
-WLN_SWING_STEP=300
-WLN_SWING_LOW=100
-
-WLN_CTRL=/var/run/hostapd-${WLN_IF}/
-WLN_PID=/var/run/hostapd-${WLN_IF}.pid
-WLN_LOG=/var/log/hostapd-${WLN_IF}.log
-WLN_CONF=/etc/conf/hostapd-${WLN_IF}.conf
-
-#####################################################
-# 0: WAN Bridge Disabled
-# 1: WAN Bridge Enabled
-VAP_WAN=0
-
-# 0: VAP VLAN Disabled
-# 1: VAP VLAN Enabled
-VAP_VLAN=0
-VAP_VLAN_ID=200
-
-VAP_CONF11=/etc/conf/hostapd-${WLN_IF}-${VAP_IF}.conf
-VAP_CONF12=/etc/conf/hostapd-${WLN_IF}-${VAP_IF}_wan.conf
-VAP_CONF21=/etc/conf/hostapd-${WLN_IF}_wan-${VAP_IF}.conf
-VAP_CONF22=/etc/conf/hostapd-${WLN_IF}_wan-${VAP_IF}_wan.conf
-VAP_CONF31=/etc/conf/hostapd-${WLN_IF}_wds-${VAP_IF}.conf
-VAP_CONF32=/etc/conf/hostapd-${WLN_IF}_wds-${VAP_IF}_wan.conf
-VAP_CONF41=/etc/conf/hostapd-${WLN_IF}_wan_wds-${VAP_IF}.conf
-VAP_CONF42=/etc/conf/hostapd-${WLN_IF}_wan_wds-${VAP_IF}_wan.conf
-
-#####################################################
-LAN_IP=192.168.112.129/25
-LAN_GW=192.168.112.129
+LAN_IP=192.168.112.193/26
+LAN_GW=192.168.112.193
 LAN_BRD=192.168.112.255
-LAN_NET=192.168.112.128/25
-LAN_MASK=255.255.255.128
-LAN_START=192.168.112.131
-LAN_END=192.168.112.158
+LAN_NET=192.168.112.192/26
+LAN_MASK=255.255.255.192
+LAN_START=192.168.112.195
+LAN_END=192.168.112.254
 
 LAN_DHCP_CONF=/etc/dhcp/dhcpd.conf
 LAN_DHCP_LEASE=/var/lib/dhcp/dhcpd.leases
@@ -366,8 +269,6 @@ WAN_INFO=${OPT_DIR}/network-wan.info
 LAN_INFO=${OPT_DIR}/network-lan.info
 
 STA_INFO=${OPT_DIR}/wireless-sta.info
-SAP_INFO=${OPT_DIR}/wireless-sap.info
-WLN_INFO=${OPT_DIR}/wireless-wln.info
 STX_INFO=${OPT_DIR}/wireless-stx.info
 WLX_INFO=${OPT_DIR}/wireless-wlx.info
 PHY_INFO=${OPT_DIR}/wireless-phy.info

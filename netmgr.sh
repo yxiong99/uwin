@@ -1045,6 +1045,10 @@ check_wln()
 
 link_wln()
 {
+    if [ ! -e "$WLN_PID" ]; then
+        logger "WLN ($WLN_IF) info: no PID. Pleae check $WLN_CONF file..."
+        exit 0
+    fi
     pid=$(ps -ef | grep $WLNCONF | awk '{print $2}')
     fid=$(cat $WLN_PID)
     for pi in $pid; do
@@ -1902,7 +1906,7 @@ check_sta()
             STA_ROAM_FULL_SCAN=0
             STA_ROAM_FAST_SCAN=0
             logger "STA ($STA_IF) info: start roam full scan (RSSI: $STA_RSSI dBm)"
-            wpa_cli -p $STA_CTRL scan > /dev/null 2>&1
+            $WPACLI -p $STA_CTRL scan > /dev/null 2>&1
             return
         fi
         if [ $STA_RSSI -le -75 ] && [ $STA_ROAM_FAST_SCAN -ge 5 ] && [ $STA_ROAM_FULL_SCAN -ge 10 ]; then
@@ -1913,9 +1917,9 @@ check_sta()
         if [ $STA_ROAM_FAST_SCAN -eq 0 ]; then
             logger "STA ($STA_IF) info: start roam fast scan (RSSI: $STA_RSSI dBm)"
             if [ -n "$SSIDSta" ]; then
-                wpa_cli -p $STA_CTRL scan $SSIDSta > /dev/null 2>&1
+                $WPACLI -p $STA_CTRL scan $SSIDSta > /dev/null 2>&1
             else
-                wpa_cli -p $STA_CTRL scan > /dev/null 2>&1
+                $WPACLI -p $STA_CTRL scan > /dev/null 2>&1
             fi
             return
         fi
@@ -1982,7 +1986,6 @@ check_sta()
             fi
             STA_WAN_NET=${sta_net}" $STA_WAN_NET"
         done
-        dump_wan_sta
     fi
     if [ "$BRI_OP" = "0" ] && [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ]; then
         eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
@@ -2061,19 +2064,18 @@ check_sta()
         ping_sta
         if [ $? -eq 1 ]; then
             logger "WAN ($STA_WAN_IF) info: lost connection (ip: $STA_WAN_IP gw: $STA_WAN_GW)"
-            if [ "$BRI_OP" = "0" ] && [ "$ETH_OP" = "1" ] && [ $ETH_PHY_UP -eq 1 ]; then
-                ETH_STATE="ATTACHED"
-                clean_sta
-            else
-                config_sta
-                dump_wan_sta
-            fi
+            clean_sta
+            dump_wan_sta
         fi
     fi
 }
 
 link_sta()
 {
+    if [ ! -e "$STA_PID" ]; then
+        logger "STA ($STA_IF) info: no PID. Pleae check $STA_CONF file..."
+        exit 0
+    fi
     pid=$(ps -ef | grep $STA_CONF | awk '{print $2}')
     fid=$(cat $STA_PID)
     for pi in $pid; do
@@ -2402,6 +2404,10 @@ check_wlx()
 
 link_wlx()
 {
+    if [ ! -e "$WLX_PID" ]; then
+        logger "WLX ($WLX_IF) info: no PID. Pleae check $WLX_CONF file..."
+        exit 0
+    fi
     pid=$(ps -ef | grep $WLX_CONF | awk '{print $2}')
     fid=$(cat $WLX_PID)
     for pi in $pid; do
@@ -2940,7 +2946,7 @@ check_stx()
             STX_ROAM_FULL_SCAN=0
             STX_ROAM_FAST_SCAN=0
             logger "STX ($STX_IF) info: start roam full scan (RSSI: $STX_RSSI dBm)"
-            wpa_cli -p $STX_CTRL scan > /dev/null 2>&1
+            $WPACLI -p $STX_CTRL scan > /dev/null 2>&1
             return
         fi
         if [ $STX_RSSI -le -75 ] && [ $STX_ROAM_FAST_SCAN -ge 5 ] && [ $STX_ROAM_FULL_SCAN -ge 10 ]; then
@@ -2951,9 +2957,9 @@ check_stx()
         if [ $STX_ROAM_FAST_SCAN -eq 0 ]; then
             logger "STX ($STX_IF) info: start roam fast scan (RSSI: $STX_RSSI dBm)"
             if [ -n "$SSIDStx" ]; then
-                wpa_cli -p $STX_CTRL scan $SSIDStx > /dev/null 2>&1
+                $WPACLI -p $STX_CTRL scan $SSIDStx > /dev/null 2>&1
             else
-                wpa_cli -p $STX_CTRL scan > /dev/null 2>&1
+                $WPACLI -p $STX_CTRL scan > /dev/null 2>&1
             fi
             return
         fi
@@ -3001,7 +3007,6 @@ check_stx()
             fi
             STX_WAN_NET=${stx_net}" $STX_WAN_NET"
         done
-        dump_wan_stx
     fi
     if [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ]; then
         eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
@@ -3078,12 +3083,17 @@ check_stx()
         if [ $? -eq 1 ]; then
             logger "WAN ($STX_WAN_IF) info: lost connection (ip: $STX_WAN_IP gw: $STX_WAN_GW)"
             clean_stx
+            dump_wan_stx
         fi
     fi
 }
 
 link_stx()
 {
+    if [ ! -e "$STX_PID" ]; then
+        logger "STX ($STX_IF) info: no PID. Pleae check $STX_CONF file..."
+        exit 0
+    fi
     pid=$(ps -ef | grep $STX_CONF | awk '{print $2}')
     fid=$(cat $STX_PID)
     for pi in $pid; do
@@ -3375,7 +3385,6 @@ check_enx()
             fi
             ENX_WAN_NET=${enx_net}" $ENX_WAN_NET"
         done
-        dump_wan_enx
     fi
     if [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ]; then
         eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
@@ -3455,7 +3464,7 @@ check_enx()
         ping_enx
         if [ $? -eq 1 ]; then
             logger "WAN ($ENX_IF) info: lost connection (ip: $ENX_WAN_IP gw: $ENX_WAN_GW)"
-            config_enx
+            clean_enx
             dump_wan_enx
         fi
     fi
@@ -3698,7 +3707,6 @@ check_usb()
             fi
             USB_WAN_NET=${usb_net}" $USB_WAN_NET"
         done
-        dump_wan_usb
     fi
     if [ "$ETH_OP" = "1" ] && [ "$ETH_STATE" = "ATTACHED" ]; then
         eth_gw=$(ip route show dev $ETH_IF | grep default | awk '{print $3}')
@@ -3782,7 +3790,7 @@ check_usb()
         ping_usb
         if [ $? -eq 1 ]; then
             logger "WAN ($USB_IF) info: lost connection (ip: $USB_WAN_IP gw: $USB_WAN_GW)"
-            config_usb
+            clean_usb
             dump_wan_usb
         fi
     fi
@@ -4168,7 +4176,6 @@ check_eth()
             fi
             ETH_WAN_NET=${eth_net}" $ETH_WAN_NET"
         done
-        dump_wan_eth
     fi
     eth_gw=$(ip route show dev $ETH_WAN_IF | grep default | awk '{print $3}')
     if [ -z "$eth_gw" ]; then
@@ -4243,14 +4250,8 @@ check_eth()
         ping_eth
         if [ $? -eq 1 ]; then
             logger "WAN ($ETH_WAN_IF) info: lost connection (ip: $ETH_WAN_IP gw: $ETH_WAN_GW)"
-            if [ "$BRI_OP" = "0" ] && [ "$STA_OP" = "1" ] && [ "$STA_STATE" = "COMPLETED" ]; then
-                ETH_STATE="DETACHED"
-                ETH_WAN_DUMMY=0
-                clean_eth
-            else
-                dynamic_eth
-                dump_wan_eth
-            fi
+            clean_eth
+            dump_wan_eth
         fi
     fi
 }
@@ -5041,7 +5042,8 @@ set_opmode()
                     logger "UWIN info: VAP Mode --> Server"
                 fi
             fi
-        elif [ -n "$WLX_IF" ]; then
+        fi
+        if [ -n "$WLX_IF" ]; then
             WLX_OP=1
             if [ "$WLX_WAN" = "1" ]; then
                 if [ "$BRI_OP" != "0" ]; then
@@ -5084,7 +5086,8 @@ set_opmode()
                     logger "UWIN info: SAP Mode --> Server"
                 fi
             fi
-        elif [ -n "$STX_IF" ]; then
+        fi
+        if [ -n "$STX_IF" ]; then
             STX_OP=1
             if [ "$STX_MODE" = "1" ]; then
                 STX_CONFIG=1
